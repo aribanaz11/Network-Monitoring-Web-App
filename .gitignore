@@ -1,3 +1,19 @@
+# Credentials, Secrets & Environment Variables
+.env
+*.env
+.env.*
+*.env.*
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+secrets.json
+credentials.json
+*.id_rsa
+*.id_ecdsa
+*.id_ed25519
+
 # Python / Django
 __pycache__/
 *.py[cod]
@@ -6,13 +22,20 @@ __pycache__/
 env/
 venv/
 *.sqlite3
+db.sqlite3
 netwatch.log
+*.log
 staticfiles/
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Node
+# Celery Beat
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
+
+# Node / Frontend
 node_modules/
 dist/
 .angular/
