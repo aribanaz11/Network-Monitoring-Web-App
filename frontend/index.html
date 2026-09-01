@@ -11,8 +11,9 @@
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body class="dark-theme">
+<body class="theme-aurora">
   <div id="app" class="app-layout">
+
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-brand">
@@ -95,6 +96,17 @@
         </div>
 
         <div class="header-right">
+          <!-- Aesthetic Theme Switcher -->
+          <div class="theme-selector-container">
+            <span class="role-label">🎨 Aesthetic:</span>
+            <select id="app-theme-switcher" class="form-select theme-select">
+              <option value="theme-aurora" selected>🌌 Aurora Violet & Emerald</option>
+              <option value="theme-sunset">🌅 Sunset Neon & Amber</option>
+              <option value="theme-forest">🍃 Forest Jade & Gold</option>
+              <option value="theme-light">☀️ Titanium Light Luxe</option>
+            </select>
+          </div>
+
           <!-- Role Switcher for Interview Demonstration -->
           <div class="role-selector-container">
             <span class="role-label">Active Role:</span>
@@ -104,6 +116,7 @@
               <option value="viewer">Viewer (Read-Only)</option>
             </select>
           </div>
+
 
           <div class="user-profile-badge">
             <div class="user-avatar" id="user-avatar-initials">OP</div>

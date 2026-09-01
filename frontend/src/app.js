@@ -418,10 +418,10 @@ const UI = {
           datasets: [{
             label: 'ICMP Latency (ms)',
             data: latencies,
-            backgroundColor: devices.map(d => d.status === 'ONLINE' ? 'rgba(56, 189, 248, 0.65)' : 'rgba(239, 68, 68, 0.65)'),
-            borderColor: devices.map(d => d.status === 'ONLINE' ? '#38bdf8' : '#ef4444'),
+            backgroundColor: devices.map(d => d.status === 'ONLINE' ? 'rgba(139, 92, 246, 0.7)' : 'rgba(244, 63, 94, 0.7)'),
+            borderColor: devices.map(d => d.status === 'ONLINE' ? '#8b5cf6' : '#f43f5e'),
             borderWidth: 1.5,
-            borderRadius: 4
+            borderRadius: 6
           }]
         },
         options: {
@@ -431,7 +431,7 @@ const UI = {
           scales: {
             y: {
               beginAtZero: true,
-              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              grid: { color: 'rgba(255, 255, 255, 0.06)' },
               ticks: { color: '#94a3b8' }
             },
             x: {
@@ -458,7 +458,7 @@ const UI = {
           labels: Object.keys(typeCounts),
           datasets: [{
             data: Object.values(typeCounts),
-            backgroundColor: ['#38bdf8', '#6366f1', '#a855f7', '#10b981', '#f59e0b'],
+            backgroundColor: ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4'],
             borderWidth: 0
           }]
         },
@@ -471,7 +471,7 @@ const UI = {
               labels: { color: '#94a3b8', boxWidth: 12, padding: 12 }
             }
           },
-          cutout: '70%'
+          cutout: '72%'
         }
       });
     }
@@ -875,6 +875,7 @@ const UI = {
 // 4. APPLICATION ROUTER & LIFECYCLE
 const App = {
   async init() {
+    this.setupTheme();
     this.setupEventListeners();
     await AuthService.switchRole('operator');
     await this.refreshCurrentView();
@@ -884,6 +885,22 @@ const App = {
         this.refreshCurrentView(true);
       }
     }, 15000);
+  },
+
+  setupTheme() {
+    const savedTheme = localStorage.getItem('netwatch_theme') || 'theme-aurora';
+    document.body.className = savedTheme;
+    const themeSelect = document.getElementById('app-theme-switcher');
+    if (themeSelect) {
+      themeSelect.value = savedTheme;
+      themeSelect.onchange = (e) => {
+        const newTheme = e.target.value;
+        document.body.className = newTheme;
+        localStorage.setItem('netwatch_theme', newTheme);
+        const name = themeSelect.options[themeSelect.selectedIndex].text;
+        UI.showToast(`Switched aesthetic theme to ${name}`, 'info');
+      };
+    }
   },
 
   setupEventListeners() {
@@ -899,6 +916,7 @@ const App = {
     document.getElementById('user-role-switcher').onchange = (e) => {
       AuthService.switchRole(e.target.value);
     };
+
 
     // Dashboard refresh
     document.getElementById('btn-refresh-dashboard').onclick = () => {
