@@ -17,6 +17,8 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 FERNET_KEY = os.environ.get('FERNET_KEY', 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=')
 SIMULATOR_MODE = os.environ.get('SIMULATOR_MODE', 'True').lower() in ('true', '1', 't')
 
+import dj_database_url
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -47,6 +49,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -61,7 +64,7 @@ ROOT_URLCONF = 'netwatch_core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [BASE_DIR / 'templates', BASE_DIR.parent / 'frontend'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -78,8 +81,17 @@ WSGI_APPLICATION = 'netwatch_core.wsgi.application'
 
 # Database Configuration (PostgreSQL with SQLite fallback for local test/dev)
 USE_SQLITE = os.environ.get('USE_SQLITE', 'True').lower() in ('true', '1', 't')
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-if USE_SQLITE:
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+elif USE_SQLITE:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -98,6 +110,15 @@ else:
             'CONN_MAX_AGE': 60,
         }
     }
+
+# Static Files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR.parent / 'frontend',
+]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # MongoDB Telemetry Configuration
 MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/')

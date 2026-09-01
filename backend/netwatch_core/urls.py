@@ -1,10 +1,23 @@
+import os
+from django.conf import settings
 from django.contrib import admin
+from django.http import FileResponse, HttpResponse
 from django.urls import path, include
 from .health import HealthCheckView
 
+def serve_frontend_index(request):
+    frontend_index = settings.BASE_DIR.parent / 'frontend' / 'index.html'
+    if os.path.exists(frontend_index):
+        return FileResponse(open(frontend_index, 'rb'), content_type='text/html')
+    return HttpResponse("<h1>NetWatch API is online.</h1><p>Visit <a href='/api/health/'>/api/health/</a></p>")
+
 urlpatterns = [
+    # Frontend Root SPA
+    path('', serve_frontend_index, name='frontend_index'),
+
+    # Django Admin
     path('admin/', admin.site.urls),
-    
+
     # System Health
     path('api/health/', HealthCheckView.as_view(), name='health_check'),
 
@@ -18,4 +31,3 @@ urlpatterns = [
     path('api/audit/', include('apps.audit.urls')),
     path('api/', include('apps.metrics.urls')),
 ]
-

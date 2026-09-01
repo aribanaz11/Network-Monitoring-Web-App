@@ -4,7 +4,10 @@
  * SSH automation terminal, SNMP telemetry explorer, and Automation Jobs.
  */
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const API_BASE_URL = (window.location.port === '4200')
+  ? 'http://127.0.0.1:8000/api'
+  : `${window.location.origin}/api`;
+
 
 // Reactive App State
 const state = {
