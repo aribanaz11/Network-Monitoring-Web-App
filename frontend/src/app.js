@@ -418,9 +418,9 @@ const UI = {
           datasets: [{
             label: 'ICMP Latency (ms)',
             data: latencies,
-            backgroundColor: devices.map(d => d.status === 'ONLINE' ? 'rgba(139, 92, 246, 0.7)' : 'rgba(244, 63, 94, 0.7)'),
-            borderColor: devices.map(d => d.status === 'ONLINE' ? '#8b5cf6' : '#f43f5e'),
-            borderWidth: 1.5,
+            backgroundColor: devices.map(d => d.status === 'ONLINE' ? 'rgba(79, 70, 229, 0.85)' : 'rgba(225, 29, 72, 0.85)'),
+            borderColor: devices.map(d => d.status === 'ONLINE' ? '#4f46e5' : '#e11d48'),
+            borderWidth: 1,
             borderRadius: 6
           }]
         },
@@ -431,12 +431,12 @@ const UI = {
           scales: {
             y: {
               beginAtZero: true,
-              grid: { color: 'rgba(255, 255, 255, 0.06)' },
-              ticks: { color: '#94a3b8' }
+              grid: { color: '#f1f5f9' },
+              ticks: { color: '#64748b', font: { family: "'Plus Jakarta Sans', sans-serif" } }
             },
             x: {
               grid: { display: false },
-              ticks: { color: '#94a3b8', font: { size: 11 } }
+              ticks: { color: '#64748b', font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 } }
             }
           }
         }
@@ -458,8 +458,9 @@ const UI = {
           labels: Object.keys(typeCounts),
           datasets: [{
             data: Object.values(typeCounts),
-            backgroundColor: ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4'],
-            borderWidth: 0
+            backgroundColor: ['#4f46e5', '#059669', '#7c3aed', '#d97706', '#0284c7'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
           }]
         },
         options: {
@@ -468,7 +469,7 @@ const UI = {
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { color: '#94a3b8', boxWidth: 12, padding: 12 }
+              labels: { color: '#64748b', boxWidth: 12, padding: 12, font: { family: "'Plus Jakarta Sans', sans-serif" } }
             }
           },
           cutout: '72%'
@@ -875,7 +876,6 @@ const UI = {
 // 4. APPLICATION ROUTER & LIFECYCLE
 const App = {
   async init() {
-    this.setupTheme();
     this.setupEventListeners();
     await AuthService.switchRole('operator');
     await this.refreshCurrentView();
@@ -887,23 +887,8 @@ const App = {
     }, 15000);
   },
 
-  setupTheme() {
-    const savedTheme = localStorage.getItem('netwatch_theme') || 'theme-aurora';
-    document.body.className = savedTheme;
-    const themeSelect = document.getElementById('app-theme-switcher');
-    if (themeSelect) {
-      themeSelect.value = savedTheme;
-      themeSelect.onchange = (e) => {
-        const newTheme = e.target.value;
-        document.body.className = newTheme;
-        localStorage.setItem('netwatch_theme', newTheme);
-        const name = themeSelect.options[themeSelect.selectedIndex].text;
-        UI.showToast(`Switched aesthetic theme to ${name}`, 'info');
-      };
-    }
-  },
-
   setupEventListeners() {
+
     // Navigation
     document.querySelectorAll('.nav-item').forEach(btn => {
       btn.onclick = () => {

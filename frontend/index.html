@@ -11,14 +11,14 @@
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body class="theme-aurora">
+<body>
   <div id="app" class="app-layout">
 
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-brand">
         <div class="brand-logo">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
             <path d="M2 12h20"></path>
@@ -29,6 +29,7 @@
           <span class="badge badge-brand">NMS & Automation</span>
         </div>
       </div>
+
 
       <nav class="sidebar-nav">
         <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
@@ -96,17 +97,6 @@
         </div>
 
         <div class="header-right">
-          <!-- Aesthetic Theme Switcher -->
-          <div class="theme-selector-container">
-            <span class="role-label">🎨 Aesthetic:</span>
-            <select id="app-theme-switcher" class="form-select theme-select">
-              <option value="theme-aurora" selected>🌌 Aurora Violet & Emerald</option>
-              <option value="theme-sunset">🌅 Sunset Neon & Amber</option>
-              <option value="theme-forest">🍃 Forest Jade & Gold</option>
-              <option value="theme-light">☀️ Titanium Light Luxe</option>
-            </select>
-          </div>
-
           <!-- Role Switcher for Interview Demonstration -->
           <div class="role-selector-container">
             <span class="role-label">Active Role:</span>
@@ -116,6 +106,7 @@
               <option value="viewer">Viewer (Read-Only)</option>
             </select>
           </div>
+
 
 
           <div class="user-profile-badge">
