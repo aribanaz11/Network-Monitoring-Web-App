@@ -9,6 +9,10 @@ from apps.network_engine.ssh import SSHAutomationEngine
 from apps.network_engine.icmp import ping_host
 from apps.accounts.permissions import IsViewerRole, IsOperatorRole
 from apps.audit.utils import log_audit_event
+from apps.events.kafka_bus import event_bus
+from apps.events.schemas import EventTopic
+
+
 
 class AutomationJobViewSet(viewsets.ModelViewSet):
     """
@@ -104,6 +108,21 @@ class AutomationJobViewSet(viewsets.ModelViewSet):
         }
         job.save()
 
+        # Emit to streaming bus
+        event_bus.publish_event(
+            topic=EventTopic.AUTOMATION_JOB,
+            payload_or_key=str(job.id),
+            payload={
+                'job_id': str(job.id),
+                'name': job.name,
+                'job_type': job.job_type,
+                'status': job.status,
+                'total_targets': len(targets),
+                'success_count': success_count,
+                'failure_count': failure_count
+            }
+        )
+
         log_audit_event(
             user=request.user,
             action='AUTOMATION_JOB_EXECUTED',
@@ -113,3 +132,4 @@ class AutomationJobViewSet(viewsets.ModelViewSet):
         )
 
         return Response(AutomationJobSerializer(job).data)
+

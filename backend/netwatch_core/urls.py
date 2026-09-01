@@ -14,6 +14,8 @@ urlpatterns = [
     path('api/monitoring/', include('apps.monitoring.urls')),
     path('api/alerts/', include('apps.alerts.urls')),
     path('api/automation/', include('apps.automation.urls')),
+    path('api/events/', include('apps.events.urls')),
     path('api/audit/', include('apps.audit.urls')),
     path('api/', include('apps.metrics.urls')),
 ]
+

@@ -11,6 +11,7 @@ from apps.network_engine.icmp import ping_host
 from apps.network_engine.snmp import SNMPClientEngine
 from apps.network_engine.circuit_breaker import CircuitBreaker
 from apps.events.kafka_bus import event_bus
+from apps.events.schemas import EventTopic
 from apps.metrics.mongo_client import telemetry_client
 
 logger = logging.getLogger('netwatch.tasks')
@@ -93,7 +94,6 @@ def poll_device_icmp_task(self, device_id: str):
             message=result.raw_output
         )
 
-
         # 6. Auto-Incident Management
         if new_status == DeviceStatus.OFFLINE and old_status != DeviceStatus.OFFLINE:
             # Device went down -> Create or reopen Alert
@@ -104,12 +104,17 @@ def poll_device_icmp_task(self, device_id: str):
                 severity=AlertSeverity.CRITICAL,
                 status=AlertStatus.OPEN
             )
-            event_bus.publish_event('alert.created', {
-                'device_id': str(device.id),
-                'hostname': device.hostname,
-                'severity': 'CRITICAL',
-                'event': 'NODE_DOWN'
-            })
+            event_bus.publish_event(
+                topic=EventTopic.ALERT_LIFECYCLE,
+                payload_or_key=str(device.id),
+                payload={
+                    'device_id': str(device.id),
+                    'hostname': device.hostname,
+                    'severity': 'CRITICAL',
+                    'event': 'NODE_DOWN',
+                    'title': f"Node Unreachable: {device.hostname} ICMP Timeout"
+                }
+            )
 
         elif new_status == DeviceStatus.ONLINE and old_status == DeviceStatus.OFFLINE:
             # Device recovered -> Auto-resolve open alerts
@@ -122,13 +127,17 @@ def poll_device_icmp_task(self, device_id: str):
 
         # Emit state change event if changed
         if old_status != new_status:
-            event_bus.publish_event('device.status.changed', {
-                'device_id': str(device.id),
-                'hostname': device.hostname,
-                'old_status': old_status,
-                'new_status': new_status,
-                'latency_ms': result.avg_latency_ms
-            })
+            event_bus.publish_event(
+                topic=EventTopic.DEVICE_STATUS,
+                payload_or_key=str(device.id),
+                payload={
+                    'device_id': str(device.id),
+                    'hostname': device.hostname,
+                    'old_status': old_status,
+                    'new_status': new_status,
+                    'latency_ms': result.avg_latency_ms
+                }
+            )
 
     return {
         'device_id': str(device.id),
@@ -159,8 +168,21 @@ def poll_device_snmp_task(self, device_id: str):
     # Execute SNMP poll
     res = SNMPClientEngine.poll_device(device)
 
-    # Threshold alerting: High CPU (> 85%) or Memory (> 90%)
+    # Publish telemetry to streaming bus
     if res.is_successful:
+        event_bus.publish_event(
+            topic=EventTopic.TELEMETRY_SNMP,
+            payload_or_key=str(device.id),
+            payload={
+                'device_id': str(device.id),
+                'hostname': device.hostname,
+                'cpu': res.cpu_utilization_percent,
+                'memory': res.memory_utilization_percent,
+                'uptime': res.sys_uptime_formatted,
+                'interfaces_count': len(res.interfaces)
+            }
+        )
+
         if res.cpu_utilization_percent >= 85.0:
             Alert.objects.get_or_create(
                 device=device,
@@ -171,6 +193,7 @@ def poll_device_snmp_task(self, device_id: str):
                     'severity': AlertSeverity.WARNING
                 }
             )
+
 
     return {
         'device_id': str(device.id),

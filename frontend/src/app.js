@@ -249,6 +249,35 @@ const ApiService = {
     return await resp.json();
   },
 
+  async fetchLiveEvents(topic = '', key = '', limit = 50) {
+    let url = `${API_BASE_URL}/events/live/?limit=${limit}`;
+    if (topic) url += `&topic=${encodeURIComponent(topic)}`;
+    if (key) url += `&key=${encodeURIComponent(key)}`;
+    const resp = await fetch(url, { headers: AuthService.getAuthHeaders() });
+    if (!resp.ok) throw new Error('Failed to retrieve live event stream');
+    return await resp.json();
+  },
+
+  async fetchEventStats() {
+    const resp = await fetch(`${API_BASE_URL}/events/stats/`, { headers: AuthService.getAuthHeaders() });
+    if (!resp.ok) throw new Error('Failed to retrieve event stream stats');
+    return await resp.json();
+  },
+
+  async replaySyntheticEvent(eventData) {
+    const resp = await fetch(`${API_BASE_URL}/events/replay/`, {
+      method: 'POST',
+      headers: AuthService.getAuthHeaders(),
+      body: JSON.stringify(eventData)
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Failed to emit synthetic stream event');
+    }
+    return await resp.json();
+  },
+
+
   async fetchAlerts() {
     try {
       const resp = await fetch(`${API_BASE_URL}/alerts/`, {
@@ -725,6 +754,83 @@ const UI = {
     });
   },
 
+  renderEventsPage(events, stats) {
+    if (stats) {
+      const isKafka = stats.stream_metrics.broker_type === 'Kafka Cluster';
+      const statusEl = document.getElementById('stream-broker-status');
+      if (statusEl) {
+        statusEl.textContent = isKafka ? 'Kafka Cluster' : 'Stream Active';
+        statusEl.className = `stat-value ${isKafka ? 'text-blue' : 'text-green'}`;
+      }
+      const tEl = document.getElementById('stream-throughput');
+      if (tEl) tEl.textContent = `${stats.stream_metrics.events_per_second || 0} EPS`;
+
+      const cEl = document.getElementById('stream-total-events');
+      if (cEl) cEl.textContent = `${stats.stream_metrics.total_events_published || 0}`;
+
+      const aEl = document.getElementById('stream-anomalies-count');
+      if (aEl) aEl.textContent = `${stats.consumer_group_metrics.active_anomalies_detected || 0}`;
+
+      // Anomaly banner
+      const banner = document.getElementById('stream-anomaly-banner');
+      if (stats.consumer_group_metrics.latest_anomalies && stats.consumer_group_metrics.latest_anomalies.length > 0) {
+        const anomaly = stats.consumer_group_metrics.latest_anomalies[0];
+        document.getElementById('anomaly-title').textContent = `Streaming Anomaly: ${anomaly.type}`;
+        document.getElementById('anomaly-desc').textContent = `${anomaly.description} (Triggered: ${new Date(anomaly.detected_at).toLocaleTimeString()})`;
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+
+    const tbody = document.getElementById('stream-events-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const list = Array.isArray(events) ? events : (events.results || []);
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 2rem;">No events published on selected topic stream.</td></tr>`;
+      return;
+    }
+
+    const topicColors = {
+      'netwatch.device.status': 'badge-brand',
+      'netwatch.alert.lifecycle': 'badge-danger',
+      'netwatch.telemetry.snmp': 'badge-outline',
+      'netwatch.automation.jobs': 'badge-success'
+    };
+
+    list.forEach(ev => {
+      const row = document.createElement('tr');
+      const badgeClass = topicColors[ev.topic] || 'badge-brand';
+      const summary = JSON.stringify(ev.payload || {}).substring(0, 75);
+      row.innerHTML = `
+        <td class="text-muted">${new Date(ev.timestamp).toLocaleTimeString()}</td>
+        <td><span class="badge ${badgeClass}">${ev.topic}</span></td>
+        <td><strong>${ev.key || '--'}</strong></td>
+        <td><code>#${ev.offset !== null && ev.offset !== undefined ? ev.offset : 'N/A'}</code></td>
+        <td class="text-muted"><span style="font-family:var(--font-mono); font-size:0.8rem;">${summary}...</span></td>
+        <td>
+          <button class="btn btn-secondary btn-xs btn-inspect-event" data-event='${JSON.stringify(ev).replace(/'/g, "&apos;")}'>Inspect JSON</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    document.querySelectorAll('.btn-inspect-event').forEach(btn => {
+      btn.onclick = () => {
+        try {
+          const raw = btn.getAttribute('data-event');
+          const data = JSON.parse(raw);
+          alert(`Stream Event Payload [Offset: ${data.offset}]:\n\n` + JSON.stringify(data, null, 2));
+        } catch (e) {
+          console.error(e);
+        }
+      };
+    });
+  },
+
+
   openPingModal(device) {
     document.getElementById('ping-modal-title').textContent = `Live ICMP Ping: ${device.hostname}`;
     document.getElementById('ping-modal-subtitle').textContent = `Sending ICMP Echo requests to ${device.ip}...`;
@@ -1071,6 +1177,7 @@ const App = {
       'snmp-telemetry': 'Live SNMP v2c / v3 Telemetry Explorer',
       automation: 'Network Automation Jobs & Scheduled Tasks',
       diagnostics: 'ICMP & TCP Diagnostic Suite',
+      events: 'Kafka Event Streaming & Anomaly Pipeline',
       alerts: 'Incident & Alert Management',
       audit: 'Compliance Audit Logs',
       architecture: 'System Architecture & Skill Matrix'
@@ -1102,6 +1209,13 @@ const App = {
         UI.renderDevicesTable(devices);
       } else if (state.activePage === 'automation') {
         UI.renderAutomationJobs(automationJobs);
+      } else if (state.activePage === 'events') {
+        const topic = document.getElementById('stream-topic-filter') ? document.getElementById('stream-topic-filter').value : '';
+        const [events, streamStats] = await Promise.all([
+          ApiService.fetchLiveEvents(topic),
+          ApiService.fetchEventStats()
+        ]);
+        UI.renderEventsPage(events, streamStats);
       } else if (state.activePage === 'alerts') {
         UI.renderAlertsPage(alerts);
       } else if (state.activePage === 'audit') {
@@ -1117,6 +1231,53 @@ const App = {
   }
 };
 
+// Hook up event stream buttons in setupEventListeners
+const originalSetup = App.setupEventListeners;
+App.setupEventListeners = function() {
+  originalSetup.call(this);
+
+  const topicFilter = document.getElementById('stream-topic-filter');
+  if (topicFilter) {
+    topicFilter.onchange = () => App.refreshCurrentView();
+  }
+  const btnRefreshStream = document.getElementById('btn-refresh-stream');
+  if (btnRefreshStream) {
+    btnRefreshStream.onclick = () => {
+      App.refreshCurrentView();
+      UI.showToast('Event stream feed refreshed', 'success');
+    };
+  }
+  const btnReplayEvent = document.getElementById('btn-replay-event');
+  if (btnReplayEvent) {
+    btnReplayEvent.onclick = async () => {
+      try {
+        await ApiService.replaySyntheticEvent({
+          topic: 'netwatch.device.status',
+          key: 'simulated-edge-router',
+          payload: {
+            hostname: 'edge-rtr-synthetic',
+            new_status: 'ONLINE',
+            latency_ms: 9.8,
+            simulated_by_user: true
+          }
+        });
+        UI.showToast('Synthetic stream event published to Kafka broker', 'success');
+        App.refreshCurrentView();
+      } catch (e) {
+        UI.showToast(e.message, 'error');
+      }
+    };
+  }
+};
+
+// Interval polling for events
+setInterval(() => {
+  if (state.activePage === 'dashboard' || state.activePage === 'events') {
+    App.refreshCurrentView(true);
+  }
+}, 4000);
+
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
+

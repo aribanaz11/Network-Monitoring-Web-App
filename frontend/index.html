@@ -54,12 +54,17 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
           <span>ICMP & TCP Diagnostics</span>
         </button>
+        <button class="nav-item" data-page="events" id="nav-events">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          <span>Kafka Event Stream</span>
+        </button>
         <button class="nav-item" data-page="alerts" id="nav-alerts">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
           <span>Alerts & Incidents</span>
           <span class="nav-count" id="nav-alert-count">1</span>
         </button>
         <button class="nav-item" data-page="audit" id="nav-audit">
+
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <span>Audit Logs</span>
         </button>
@@ -513,10 +518,111 @@
               </div>
             </div>
           </div>
+        <!-- 6. KAFKA EVENT STREAMING PAGE -->
+        <section id="page-events" class="page-view">
+          <!-- Metrics Bar -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon icon-blue">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">Streaming Broker</span>
+                <h3 class="stat-value" id="stream-broker-status">Active Stream</h3>
+                <span class="stat-meta text-green">In-Memory / Kafka</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon icon-green">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">Ingestion Throughput</span>
+                <h3 class="stat-value" id="stream-throughput">0.0 EPS</h3>
+                <span class="stat-meta text-muted">Events per second</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon icon-purple">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">Total Ingested Events</span>
+                <h3 class="stat-value" id="stream-total-events">0</h3>
+                <span class="stat-meta text-muted">Stream buffer count</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon icon-red">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">Stream Anomalies</span>
+                <h3 class="stat-value" id="stream-anomalies-count">0</h3>
+                <span class="stat-meta text-muted">Cascade / CPU spikes</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Anomaly Banner -->
+          <div id="stream-anomaly-banner" class="alert-banner" style="display:none; margin-bottom: 1.5rem;">
+            <div class="banner-icon">&#9888;&#65039;</div>
+            <div class="banner-body">
+              <strong id="anomaly-title">Stream Anomaly Alert</strong>
+              <p id="anomaly-desc">Anomaly description</p>
+            </div>
+          </div>
+
+          <!-- Event Stream Feed Card -->
+          <div class="data-table-card">
+            <div class="card-header flex-between">
+              <div class="header-title">
+                <h3>Real-Time Event Stream Log</h3>
+                <p>Live event publication across NetWatch Kafka topics</p>
+              </div>
+              <div class="header-actions flex-gap">
+                <select id="stream-topic-filter" class="form-select select-sm">
+                  <option value="">All Stream Topics</option>
+                  <option value="netwatch.device.status">netwatch.device.status</option>
+                  <option value="netwatch.alert.lifecycle">netwatch.alert.lifecycle</option>
+                  <option value="netwatch.telemetry.snmp">netwatch.telemetry.snmp</option>
+                  <option value="netwatch.automation.jobs">netwatch.automation.jobs</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="btn-replay-event">
+                  <span>+ Emit Test Event</span>
+                </button>
+                <button class="btn btn-primary btn-sm" id="btn-refresh-stream">
+                  <span>Refresh Feed</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Topic</th>
+                    <th>Routing Key</th>
+                    <th>Offset</th>
+                    <th>Event Payload Summary</th>
+                    <th>Inspector</th>
+                  </tr>
+                </thead>
+                <tbody id="stream-events-tbody">
+                  <tr><td colspan="6" class="text-center text-muted">Loading live event stream...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <!-- 7. ALERTS & INCIDENTS PAGE -->
         <section id="page-alerts" class="page-view">
+
           <div class="data-table-card">
             <div class="card-header">
               <div class="header-title">
