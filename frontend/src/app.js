@@ -1,6 +1,7 @@
 /**
  * NetWatch Frontend Application Logic (Modern Reactive Architecture)
- * Handles state, REST APIs, JWT tokens, RBAC roles, Chart.js telemetry, and live ping interactions.
+ * Handles state, REST APIs, JWT tokens, RBAC roles, Chart.js telemetry,
+ * SSH automation terminal, SNMP telemetry explorer, and Automation Jobs.
  */
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
@@ -16,6 +17,7 @@ const state = {
   devices: [],
   alerts: [],
   auditLogs: [],
+  automationJobs: [],
   dashboardStats: null,
   activePage: 'dashboard',
   selectedDeviceForPing: null,
@@ -57,7 +59,6 @@ const AuthService = {
         UI.showToast(`Switched active session to ${cred.role} (${cred.name})`, 'info');
         App.refreshCurrentView();
       } else {
-        // Fallback for offline API dev mode
         state.currentUser = { email: cred.email, name: cred.name, role: cred.role, token: 'mock_token' };
         UI.updateUserBadge();
         UI.showToast(`Role switched to ${cred.role} (Mock Auth)`, 'info');
@@ -87,7 +88,7 @@ const ApiService = {
       });
       if (resp.ok) return await resp.json();
     } catch (e) {
-      console.warn("Using cached / fallback dashboard stats:", e);
+      console.warn("Using fallback dashboard stats:", e);
     }
     return null;
   },
@@ -146,13 +147,11 @@ const ApiService = {
   },
 
   async executeCustomPing(ip, count = 3, timeout = 2) {
-    // If registered device matches IP, call endpoint, else fallback simulation
     const match = state.devices.find(d => d.ip_address === ip);
     if (match) {
       return await this.executePing(match.id, count, timeout);
     }
 
-    // Call native probe simulator
     const isUp = !ip.endsWith('.9');
     const lat = isUp ? (8.5 + Math.random() * 8).toFixed(2) : null;
     return {
@@ -179,6 +178,74 @@ const ApiService = {
       const err = await resp.json();
       throw new Error(err.detail || 'TCP check failed');
     }
+    return await resp.json();
+  },
+
+  async executeSSH(deviceId, command) {
+    const resp = await fetch(`${API_BASE_URL}/devices/${deviceId}/ssh/`, {
+      method: 'POST',
+      headers: AuthService.getAuthHeaders(),
+      body: JSON.stringify({ command, timeout: 10 })
+    });
+    const data = await resp.json();
+    if (!resp.ok && resp.status !== 403) {
+      throw new Error(data.detail || data.stderr || 'SSH command failed');
+    }
+    return data;
+  },
+
+  async fetchSNMP(deviceId) {
+    const resp = await fetch(`${API_BASE_URL}/devices/${deviceId}/snmp/`, {
+      headers: AuthService.getAuthHeaders()
+    });
+    if (!resp.ok) throw new Error('Failed to retrieve SNMP metrics');
+    return await resp.json();
+  },
+
+  async walkSNMP(deviceId, root_oid = '1.3.6.1.2.1.1') {
+    const resp = await fetch(`${API_BASE_URL}/devices/${deviceId}/snmp/walk/`, {
+      method: 'POST',
+      headers: AuthService.getAuthHeaders(),
+      body: JSON.stringify({ root_oid })
+    });
+    if (!resp.ok) throw new Error('Failed to execute SNMP walk');
+    return await resp.json();
+  },
+
+  async fetchAutomationJobs() {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/automation/jobs/`, {
+        headers: AuthService.getAuthHeaders()
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        return Array.isArray(data) ? data : data.results || [];
+      }
+    } catch (e) {
+      console.warn("Using fallback automation jobs:", e);
+    }
+    return [];
+  },
+
+  async createAutomationJob(jobData) {
+    const resp = await fetch(`${API_BASE_URL}/automation/jobs/`, {
+      method: 'POST',
+      headers: AuthService.getAuthHeaders(),
+      body: JSON.stringify(jobData)
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Failed to create automation job');
+    }
+    return await resp.json();
+  },
+
+  async runAutomationJob(jobId) {
+    const resp = await fetch(`${API_BASE_URL}/automation/jobs/${jobId}/run/`, {
+      method: 'POST',
+      headers: AuthService.getAuthHeaders()
+    });
+    if (!resp.ok) throw new Error('Failed to execute automation job');
     return await resp.json();
   },
 
@@ -251,7 +318,6 @@ const UI = {
       document.getElementById('kpi-uptime').textContent = `${stats.uptime_percentage}% Availability`;
     }
 
-    // Render Recent Alerts Table
     const tbody = document.getElementById('dashboard-alerts-tbody');
     tbody.innerHTML = '';
 
@@ -276,7 +342,6 @@ const UI = {
       });
     }
 
-    // Attach incident button handlers
     document.querySelectorAll('.btn-ack-alert').forEach(btn => {
       btn.onclick = async () => {
         try {
@@ -301,18 +366,15 @@ const UI = {
       };
     });
 
-    // Update Nav Alert Count
     const openCount = alerts.filter(a => a.status === 'OPEN').length;
     document.getElementById('nav-alert-count').textContent = openCount;
 
-    // Render Charts
     this.renderCharts(devices);
   },
 
   renderCharts(devices) {
     if (!devices || devices.length === 0) return;
 
-    // Latency Bar Chart
     const latencyCtx = document.getElementById('latencyChart');
     if (latencyCtx) {
       const labels = devices.map(d => d.hostname);
@@ -352,7 +414,6 @@ const UI = {
       });
     }
 
-    // Type Doughnut Chart
     const typeCtx = document.getElementById('typeChart');
     if (typeCtx) {
       const typeCounts = {};
@@ -413,7 +474,6 @@ const UI = {
     }
 
     filtered.forEach(d => {
-      const isOnline = d.status === 'ONLINE';
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>
@@ -433,6 +493,9 @@ const UI = {
             <button class="btn btn-primary btn-xs btn-instant-ping" data-id="${d.id}" data-hostname="${d.hostname}" data-ip="${d.ip_address}" title="Instant ICMP Ping">
               ⚡ Ping
             </button>
+            <button class="btn btn-secondary btn-xs btn-instant-ssh" data-id="${d.id}" data-hostname="${d.hostname}" title="Launch SSH Terminal">
+              💻 SSH
+            </button>
             <button class="btn btn-secondary btn-xs btn-delete-device" data-id="${d.id}" title="Delete Device (Admin)">
               🗑️
             </button>
@@ -442,16 +505,8 @@ const UI = {
       tbody.appendChild(row);
     });
 
-    // Populate Diagnostics device dropdown
-    const select = document.getElementById('diag-device-select');
-    select.innerHTML = '<option value="">-- Select Registered Device --</option>';
-    devices.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d.ip_address;
-      opt.dataset.id = d.id;
-      opt.textContent = `${d.hostname} (${d.ip_address})`;
-      select.appendChild(opt);
-    });
+    // Populate selectors across app
+    this.populateDeviceSelectors(devices);
 
     // Instant Ping Button Handler
     document.querySelectorAll('.btn-instant-ping').forEach(btn => {
@@ -462,6 +517,15 @@ const UI = {
           ip: btn.dataset.ip
         };
         UI.openPingModal(state.selectedDeviceForPing);
+      };
+    });
+
+    // Instant SSH Button Handler
+    document.querySelectorAll('.btn-instant-ssh').forEach(btn => {
+      btn.onclick = () => {
+        App.navigateTo('ssh-terminal');
+        document.getElementById('ssh-target-device').value = btn.dataset.id;
+        document.getElementById('ssh-terminal-title').textContent = `SSH Session: ${btn.dataset.hostname} (Ready)`;
       };
     });
 
@@ -476,6 +540,109 @@ const UI = {
           } catch (e) {
             UI.showToast(e.message, 'error');
           }
+        }
+      };
+    });
+  },
+
+  populateDeviceSelectors(devices) {
+    // 1. SSH Target Selector
+    const sshSelect = document.getElementById('ssh-target-device');
+    if (sshSelect) {
+      const cur = sshSelect.value;
+      sshSelect.innerHTML = '<option value="">-- Choose Target Network Device --</option>';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.hostname} (${d.ip_address}) - [${d.vendor} ${d.device_type}]`;
+        sshSelect.appendChild(opt);
+      });
+      if (cur) sshSelect.value = cur;
+    }
+
+    // 2. SNMP Target Selector
+    const snmpSelect = document.getElementById('snmp-target-device');
+    if (snmpSelect) {
+      const cur = snmpSelect.value;
+      snmpSelect.innerHTML = '';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.hostname} (${d.ip_address}) - [${d.snmp_version}]`;
+        snmpSelect.appendChild(opt);
+      });
+      if (cur) snmpSelect.value = cur;
+    }
+
+    // 3. Diagnostics Selector
+    const diagSelect = document.getElementById('diag-device-select');
+    if (diagSelect) {
+      diagSelect.innerHTML = '<option value="">-- Select Registered Device --</option>';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.ip_address;
+        opt.dataset.id = d.id;
+        opt.textContent = `${d.hostname} (${d.ip_address})`;
+        diagSelect.appendChild(opt);
+      });
+    }
+
+    // 4. Job Target Multi-select
+    const jobSelect = document.getElementById('job-targets-select');
+    if (jobSelect) {
+      jobSelect.innerHTML = '';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.hostname} (${d.ip_address})`;
+        opt.selected = true;
+        jobSelect.appendChild(opt);
+      });
+    }
+  },
+
+  renderAutomationJobs(jobs) {
+    const tbody = document.getElementById('automation-jobs-tbody');
+    tbody.innerHTML = '';
+
+    if (!jobs || jobs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-muted" style="text-align:center; padding: 2rem;">No automation jobs recorded. Create one above to execute.</td></tr>`;
+      return;
+    }
+
+    jobs.forEach(j => {
+      const isSuccess = j.status === 'SUCCESS';
+      const isRunning = j.status === 'RUNNING';
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><strong>${j.name}</strong></td>
+        <td><span class="badge badge-brand">${j.job_type}</span></td>
+        <td>
+          <span class="status-pill ${isSuccess ? 'online' : (isRunning ? 'warning' : 'offline')}">
+            ${j.status}
+          </span>
+        </td>
+        <td>${j.target_device_count} Device(s)</td>
+        <td class="text-muted">${j.triggered_by_email}</td>
+        <td class="text-muted">${j.completed_at ? new Date(j.completed_at).toLocaleString() : '--'}</td>
+        <td>
+          <button class="btn btn-primary btn-xs btn-run-job" data-id="${j.id}">
+            ▶ Run Job
+          </button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    document.querySelectorAll('.btn-run-job').forEach(btn => {
+      btn.onclick = async () => {
+        try {
+          UI.showToast(`Executing job ${btn.dataset.id.substring(0,8)}...`, 'info');
+          const updated = await ApiService.runAutomationJob(btn.dataset.id);
+          UI.showToast(`Job finished with status: ${updated.status}`, 'success');
+          App.refreshCurrentView();
+        } catch (e) {
+          UI.showToast(e.message, 'error');
         }
       };
     });
@@ -510,7 +677,6 @@ const UI = {
       tbody.appendChild(row);
     });
 
-    // Reattach listeners
     document.querySelectorAll('.btn-ack-alert').forEach(btn => {
       btn.onclick = async () => {
         try {
@@ -570,7 +736,6 @@ const UI = {
     document.getElementById('modal-ping-raw-output').textContent = `PING ${device.ip} (${device.ip}) 32 bytes of data...\n`;
 
     document.getElementById('instant-ping-modal').classList.add('active');
-
     this.runInstantPing(device);
   },
 
@@ -605,10 +770,9 @@ const UI = {
 const App = {
   async init() {
     this.setupEventListeners();
-    await AuthService.switchRole('operator'); // Default demo role
+    await AuthService.switchRole('operator');
     await this.refreshCurrentView();
 
-    // Auto-refresh interval for live dashboard
     setInterval(() => {
       if (state.activePage === 'dashboard') {
         this.refreshCurrentView(true);
@@ -640,11 +804,9 @@ const App = {
     document.getElementById('btn-open-add-device').onclick = () => {
       document.getElementById('add-device-modal').classList.add('active');
     };
-
     document.getElementById('btn-close-device-modal').onclick = () => {
       document.getElementById('add-device-modal').classList.remove('active');
     };
-
     document.getElementById('btn-cancel-device-modal').onclick = () => {
       document.getElementById('add-device-modal').classList.remove('active');
     };
@@ -676,15 +838,116 @@ const App = {
       }
     };
 
+    // SSH Terminal Presets & Execution (Phase 2)
+    document.querySelectorAll('#ssh-preset-chips .chip-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.getElementById('ssh-custom-command').value = btn.dataset.cmd;
+        this.runSSHCommand();
+      };
+    });
+
+    document.getElementById('btn-execute-ssh').onclick = () => {
+      this.runSSHCommand();
+    };
+
+    // SNMP Polling & Walk Handlers (Phase 2)
+    document.getElementById('btn-poll-snmp').onclick = async () => {
+      const devId = document.getElementById('snmp-target-device').value;
+      if (!devId) {
+        UI.showToast('Please select a device for SNMP polling', 'error');
+        return;
+      }
+      try {
+        UI.showToast('Polling live MIB metrics via SNMP...', 'info');
+        const data = await ApiService.fetchSNMP(devId);
+        document.getElementById('snmp-uptime').textContent = data.sys_uptime_formatted || '00:00:00';
+        document.getElementById('snmp-version-lbl').textContent = `SNMP ${data.snmp_version}`;
+        document.getElementById('snmp-cpu').textContent = `${data.cpu_utilization_percent}%`;
+        document.getElementById('snmp-memory').textContent = `${data.memory_utilization_percent}%`;
+        document.getElementById('snmp-sysdescr').textContent = data.sys_descr;
+
+        // Render Interfaces
+        const tbody = document.getElementById('snmp-interfaces-tbody');
+        tbody.innerHTML = '';
+        (data.interfaces || []).forEach(iface => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><strong>${iface.name}</strong></td>
+            <td><span class="status-pill ${iface.oper_status.toLowerCase()}">${iface.oper_status}</span></td>
+            <td>${iface.speed_mbps} Mbps</td>
+            <td><code>${iface.in_octets.toLocaleString()} bytes</code></td>
+            <td><code>${iface.out_octets.toLocaleString()} bytes</code></td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        UI.showToast('SNMP live telemetry refreshed & pushed to MongoDB', 'success');
+      } catch (err) {
+        UI.showToast(err.message, 'error');
+      }
+    };
+
+    document.getElementById('btn-walk-snmp').onclick = async () => {
+      const devId = document.getElementById('snmp-target-device').value;
+      if (!devId) return;
+      try {
+        const walkData = await ApiService.walkSNMP(devId, '1.3.6.1.2.1.1');
+        document.getElementById('snmp-sysdescr').textContent = JSON.stringify(walkData.oids, null, 2);
+        UI.showToast(`SNMP walk completed (${walkData.entries_count} OIDs found)`, 'success');
+      } catch (err) {
+        UI.showToast(err.message, 'error');
+      }
+    };
+
+    // Automation Jobs Modal & Creation (Phase 2)
+    document.getElementById('btn-open-create-job').onclick = () => {
+      document.getElementById('create-job-modal').classList.add('active');
+    };
+    document.getElementById('btn-close-job-modal').onclick = () => {
+      document.getElementById('create-job-modal').classList.remove('active');
+    };
+    document.getElementById('btn-cancel-job-modal').onclick = () => {
+      document.getElementById('create-job-modal').classList.remove('active');
+    };
+
+    document.getElementById('job-type-select').onchange = (e) => {
+      const cmdGroup = document.getElementById('job-command-group');
+      cmdGroup.style.display = (e.target.value === 'EXECUTE_COMMAND') ? 'block' : 'none';
+    };
+
+    document.getElementById('create-job-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const targets = Array.from(document.getElementById('job-targets-select').selectedOptions).map(o => o.value);
+      if (targets.length === 0) {
+        UI.showToast('Select at least one target device', 'error');
+        return;
+      }
+      const jobData = {
+        name: document.getElementById('job-name').value,
+        job_type: document.getElementById('job-type-select').value,
+        command: document.getElementById('job-command-input').value,
+        target_device_ids: targets
+      };
+
+      try {
+        const created = await ApiService.createAutomationJob(jobData);
+        UI.showToast(`Automation job '${created.name}' created`, 'success');
+        document.getElementById('create-job-modal').classList.remove('active');
+        document.getElementById('create-job-form').reset();
+        
+        // Auto trigger execution
+        await ApiService.runAutomationJob(created.id);
+        UI.showToast('Job executed across target devices', 'success');
+        App.refreshCurrentView();
+      } catch (err) {
+        UI.showToast(err.message, 'error');
+      }
+    };
+
     // Device Search & Filter triggers
     document.getElementById('device-search-input').oninput = () => UI.renderDevicesTable(state.devices);
     document.getElementById('device-filter-type').onchange = () => UI.renderDevicesTable(state.devices);
     document.getElementById('device-filter-status').onchange = () => UI.renderDevicesTable(state.devices);
-
-    // Diagnostics dropdown sync
-    document.getElementById('diag-device-select').onchange = (e) => {
-      document.getElementById('diag-target-ip').value = e.target.value;
-    };
 
     // Diagnostics Run Ping
     document.getElementById('btn-run-ping').onclick = async () => {
@@ -753,6 +1016,44 @@ const App = {
     };
   },
 
+  async runSSHCommand() {
+    const devId = document.getElementById('ssh-target-device').value;
+    const command = document.getElementById('ssh-custom-command').value.trim();
+    if (!devId) {
+      UI.showToast('Please select a target device for SSH', 'error');
+      return;
+    }
+    if (!command) {
+      UI.showToast('Please enter or select a command', 'error');
+      return;
+    }
+
+    const device = state.devices.find(d => d.id === devId);
+    const hostname = device ? device.hostname : 'Device';
+    const terminal = document.getElementById('ssh-terminal-output');
+    const badge = document.getElementById('ssh-execution-badge');
+
+    terminal.innerHTML += `\n[${new Date().toLocaleTimeString()}] ${hostname}# ${command}\n`;
+    terminal.scrollTop = terminal.scrollHeight;
+
+    try {
+      const res = await ApiService.executeSSH(devId, command);
+      badge.style.display = 'inline-block';
+      badge.textContent = `${res.execution_duration_ms} ms (Exit: ${res.exit_status})`;
+
+      if (res.is_successful) {
+        terminal.innerHTML += `<span style="color:#10b981;">${res.stdout}</span>\n`;
+      } else {
+        terminal.innerHTML += `<span style="color:#ef4444;">[SECURITY REJECTION / ERROR]: ${res.stderr || 'Command failed'}</span>\n`;
+        UI.showToast(res.stderr || 'Command execution rejected', 'error');
+      }
+      terminal.scrollTop = terminal.scrollHeight;
+    } catch (err) {
+      terminal.innerHTML += `<span style="color:#ef4444;">Error: ${err.message}</span>\n`;
+      UI.showToast(err.message, 'error');
+    }
+  },
+
   navigateTo(pageId) {
     state.activePage = pageId;
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -766,6 +1067,9 @@ const App = {
     const titles = {
       dashboard: 'Executive Dashboard',
       devices: 'Device Inventory & Topology',
+      'ssh-terminal': 'Paramiko SSH Automation Terminal',
+      'snmp-telemetry': 'Live SNMP v2c / v3 Telemetry Explorer',
+      automation: 'Network Automation Jobs & Scheduled Tasks',
       diagnostics: 'ICMP & TCP Diagnostic Suite',
       alerts: 'Incident & Alert Management',
       audit: 'Compliance Audit Logs',
@@ -778,26 +1082,34 @@ const App = {
 
   async refreshCurrentView(silent = false) {
     try {
-      const [stats, devices, alerts, auditLogs] = await Promise.all([
+      const [stats, devices, alerts, auditLogs, automationJobs] = await Promise.all([
         ApiService.fetchDashboardStats(),
         ApiService.fetchDevices(),
         ApiService.fetchAlerts(),
-        ApiService.fetchAuditLogs()
+        ApiService.fetchAuditLogs(),
+        ApiService.fetchAutomationJobs()
       ]);
 
       state.dashboardStats = stats;
       state.devices = devices;
       state.alerts = alerts;
       state.auditLogs = auditLogs;
+      state.automationJobs = automationJobs;
 
       if (state.activePage === 'dashboard') {
         UI.renderDashboard(stats, devices, alerts);
       } else if (state.activePage === 'devices') {
         UI.renderDevicesTable(devices);
+      } else if (state.activePage === 'automation') {
+        UI.renderAutomationJobs(automationJobs);
       } else if (state.activePage === 'alerts') {
         UI.renderAlertsPage(alerts);
       } else if (state.activePage === 'audit') {
         UI.renderAuditPage(auditLogs);
+      } else if (state.activePage === 'snmp-telemetry') {
+        UI.populateDeviceSelectors(devices);
+      } else if (state.activePage === 'ssh-terminal') {
+        UI.populateDeviceSelectors(devices);
       }
     } catch (err) {
       if (!silent) console.error("Error refreshing view:", err);
@@ -805,7 +1117,6 @@ const App = {
   }
 };
 
-// Initialize Application on DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });

@@ -25,7 +25,7 @@
         </div>
         <div class="brand-info">
           <h2>NetWatch</h2>
-          <span class="badge badge-brand">NMS Platform</span>
+          <span class="badge badge-brand">NMS & Automation</span>
         </div>
       </div>
 
@@ -37,6 +37,18 @@
         <button class="nav-item" data-page="devices" id="nav-devices">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           <span>Device Inventory</span>
+        </button>
+        <button class="nav-item" data-page="ssh-terminal" id="nav-ssh-terminal">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+          <span>SSH Automation Terminal</span>
+        </button>
+        <button class="nav-item" data-page="snmp-telemetry" id="nav-snmp-telemetry">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
+          <span>SNMP v2c/v3 Telemetry</span>
+        </button>
+        <button class="nav-item" data-page="automation" id="nav-automation">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span>Automation Jobs</span>
         </button>
         <button class="nav-item" data-page="diagnostics" id="nav-diagnostics">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
@@ -83,7 +95,7 @@
             <span class="role-label">Active Role:</span>
             <select id="user-role-switcher" class="form-select role-select">
               <option value="admin">Administrator (Full Access)</option>
-              <option value="operator" selected>Operator (Monitoring & Ping)</option>
+              <option value="operator" selected>Operator (Monitoring & CLI)</option>
               <option value="viewer">Viewer (Read-Only)</option>
             </select>
           </div>
@@ -102,7 +114,6 @@
       <main class="content-container">
         <!-- 1. DASHBOARD PAGE -->
         <section id="page-dashboard" class="page-view active">
-          <!-- KPI Cards Grid -->
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-icon-wrapper bg-blue">
@@ -149,7 +160,6 @@
             </div>
           </div>
 
-          <!-- Charts Row -->
           <div class="dashboard-charts-row">
             <div class="chart-card flex-2">
               <div class="card-header">
@@ -172,7 +182,6 @@
             </div>
           </div>
 
-          <!-- Active Incidents Feed -->
           <div class="data-table-card">
             <div class="card-header">
               <div class="header-title">
@@ -196,9 +205,7 @@
                     <th>Action</th>
                   </tr>
                 </thead>
-                <tbody id="dashboard-alerts-tbody">
-                  <!-- Rendered dynamically -->
-                </tbody>
+                <tbody id="dashboard-alerts-tbody"></tbody>
               </table>
             </div>
           </div>
@@ -235,7 +242,6 @@
             </div>
           </div>
 
-          <!-- Device Cards / Table -->
           <div class="data-table-card">
             <div class="table-responsive">
               <table class="data-table" id="devices-table">
@@ -251,15 +257,195 @@
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody id="devices-tbody">
-                  <!-- Populated dynamically -->
-                </tbody>
+                <tbody id="devices-tbody"></tbody>
               </table>
             </div>
           </div>
         </section>
 
-        <!-- 3. ICMP & TCP DIAGNOSTICS PAGE -->
+        <!-- 3. SSH AUTOMATION TERMINAL (PHASE 2) -->
+        <section id="page-ssh-terminal" class="page-view">
+          <div class="diagnostics-layout">
+            <div class="diag-form-card">
+              <div class="card-header">
+                <h3>Paramiko SSH Automation Terminal</h3>
+                <span class="badge badge-brand">SSHv2 Safe Whitelist</span>
+              </div>
+              <p class="text-muted" style="font-size:0.82rem; margin-bottom:1rem;">
+                Connect securely to routers, switches, and servers using decrypted Fernet credentials. All command executions are timed and recorded in the audit trail.
+              </p>
+
+              <div class="form-group">
+                <label>Select Target Device *</label>
+                <select id="ssh-target-device" class="form-select">
+                  <option value="">-- Choose Target Network Device --</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-top: 1rem;">
+                <label>Whitelisted Preset Commands</label>
+                <div class="preset-chips-container" id="ssh-preset-chips">
+                  <button class="chip-btn" data-cmd="show ip interface brief">show ip interface brief</button>
+                  <button class="chip-btn" data-cmd="show version">show version</button>
+                  <button class="chip-btn" data-cmd="show running-config">show running-config</button>
+                  <button class="chip-btn" data-cmd="uname -a">uname -a</button>
+                  <button class="chip-btn" data-cmd="df -h">df -h</button>
+                  <button class="chip-btn" data-cmd="uptime">uptime</button>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 1rem;">
+                <label>Custom Command String</label>
+                <div class="input-with-button">
+                  <input type="text" id="ssh-custom-command" class="form-input" placeholder="e.g. show ip route or uptime">
+                  <button class="btn btn-primary" id="btn-execute-ssh">Execute SSH</button>
+                </div>
+                <span class="text-muted" style="font-size:0.75rem; margin-top:4px;">
+                  ⚠️ Destructive commands (<code>rm -rf</code>, <code>reboot</code>, <code>erase</code>) are automatically rejected by security policies.
+                </span>
+              </div>
+            </div>
+
+            <!-- Terminal Window -->
+            <div class="terminal-card">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                </div>
+                <span class="terminal-title" id="ssh-terminal-title">SSH Session: Disconnected</span>
+                <span class="badge badge-outline" id="ssh-execution-badge" style="display:none;">0 ms</span>
+              </div>
+              <div class="terminal-body" id="ssh-terminal-output">
+                <div class="terminal-line text-muted">[NetWatch Paramiko SSH Automation Engine v1.0.0 Ready]</div>
+                <div class="terminal-line text-muted">Select a target device and execute a whitelisted command...</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. SNMP TELEMETRY EXPLORER (PHASE 2) -->
+        <section id="page-snmp-telemetry" class="page-view">
+          <div class="view-actions-bar">
+            <div class="form-group" style="width: 320px;">
+              <label>Target SNMP Polling Node</label>
+              <select id="snmp-target-device" class="form-select"></select>
+            </div>
+            <div class="filter-group">
+              <button class="btn btn-primary" id="btn-poll-snmp">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                <span>Poll Live SNMP Telemetry</span>
+              </button>
+              <button class="btn btn-secondary" id="btn-walk-snmp">
+                <span>Run SNMP Walk (1.3.6.1.2.1.1)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- SNMP Stat Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon-wrapper bg-blue">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">System Uptime</span>
+                <h3 class="stat-value" id="snmp-uptime">42d 14h 28m</h3>
+                <span class="stat-trend text-muted" id="snmp-version-lbl">SNMP v2c</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon-wrapper bg-purple">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">CPU Utilization</span>
+                <h3 class="stat-value text-purple" id="snmp-cpu">34.2%</h3>
+                <span class="stat-trend text-muted">hrProcessorLoad.1</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon-wrapper bg-green">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">Memory Utilization</span>
+                <h3 class="stat-value text-green" id="snmp-memory">48.5%</h3>
+                <span class="stat-trend text-muted">ciscoMemoryPoolUsed</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- sysDescr Panel -->
+          <div class="data-table-card">
+            <div class="card-header">
+              <h3>System MIB Description (sysDescr.0)</h3>
+            </div>
+            <div class="blueprint-box" style="margin-top:0;">
+              <pre id="snmp-sysdescr">Cisco Systems Cisco ASR 9006, OS: IOS-XR 7.3.2, Compiled 2026</pre>
+            </div>
+          </div>
+
+          <!-- Interfaces Table -->
+          <div class="data-table-card">
+            <div class="card-header">
+              <h3>Live SNMP Interface Metrics (ifTable / ifXTable)</h3>
+              <span class="badge badge-outline">Stored to MongoDB Telemetry</span>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Interface Name</th>
+                    <th>Oper Status</th>
+                    <th>Speed</th>
+                    <th>Inbound Octets (ifInOctets)</th>
+                    <th>Outbound Octets (ifOutOctets)</th>
+                  </tr>
+                </thead>
+                <tbody id="snmp-interfaces-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. AUTOMATION JOBS (PHASE 2) -->
+        <section id="page-automation" class="page-view">
+          <div class="view-actions-bar">
+            <div class="header-title">
+              <h3>Network Automation Jobs & Scheduled Tasks</h3>
+              <p>Run configuration backups, command execution batches, and subnet ping sweeps</p>
+            </div>
+            <button class="btn btn-primary" id="btn-open-create-job">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Create Automation Job</span>
+            </button>
+          </div>
+
+          <div class="data-table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Job Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Targets</th>
+                    <th>Triggered By</th>
+                    <th>Last Run Time</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="automation-jobs-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. ICMP & TCP DIAGNOSTICS PAGE -->
         <section id="page-diagnostics" class="page-view">
           <div class="diagnostics-layout">
             <div class="diag-form-card">
@@ -311,7 +497,6 @@
               </div>
             </div>
 
-            <!-- Terminal Output Console -->
             <div class="terminal-card">
               <div class="terminal-header">
                 <div class="terminal-dots">
@@ -330,7 +515,7 @@
           </div>
         </section>
 
-        <!-- 4. ALERTS & INCIDENTS PAGE -->
+        <!-- 7. ALERTS & INCIDENTS PAGE -->
         <section id="page-alerts" class="page-view">
           <div class="data-table-card">
             <div class="card-header">
@@ -352,21 +537,19 @@
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody id="alerts-page-tbody">
-                  <!-- Populated dynamically -->
-                </tbody>
+                <tbody id="alerts-page-tbody"></tbody>
               </table>
             </div>
           </div>
         </section>
 
-        <!-- 5. AUDIT LOGS PAGE -->
+        <!-- 8. AUDIT LOGS PAGE -->
         <section id="page-audit" class="page-view">
           <div class="data-table-card">
             <div class="card-header">
               <div class="header-title">
                 <h3>Compliance & Security Audit Trail</h3>
-                <p>Immutable log of every user action, device registration, and ping test</p>
+                <p>Immutable log of every user action, SSH execution, and device change</p>
               </div>
             </div>
             <div class="table-responsive">
@@ -381,15 +564,13 @@
                     <th>Operation Details</th>
                   </tr>
                 </thead>
-                <tbody id="audit-tbody">
-                  <!-- Populated dynamically -->
-                </tbody>
+                <tbody id="audit-tbody"></tbody>
               </table>
             </div>
           </div>
         </section>
 
-        <!-- 6. ARCHITECTURE & INTERVIEW MAPPING PAGE -->
+        <!-- 9. ARCHITECTURE & INTERVIEW MAPPING PAGE -->
         <section id="page-architecture" class="page-view">
           <div class="architecture-grid">
             <div class="arch-card">
@@ -417,7 +598,7 @@
                 <pre>
 ┌─────────────────────────────────────────────────────────────┐
 │                    Angular Web Client                       │
-│  (Executive Dashboard / Device Inventory / Live Ping Stream)│
+│  (Dashboard / SSH Terminal / SNMP Telemetry / Jobs Manager) │
 └──────────────────────────────┬──────────────────────────────┘
                                │ REST / JSON (JWT Auth)
                                ▼
@@ -532,6 +713,44 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" id="btn-cancel-device-modal">Cancel</button>
           <button type="submit" class="btn btn-primary" id="btn-submit-device">Register Device</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Automation Job Modal -->
+  <div class="modal-overlay" id="create-job-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create Automation Task</h3>
+        <button class="modal-close" id="btn-close-job-modal">&times;</button>
+      </div>
+      <form id="create-job-form" class="modal-body">
+        <div class="form-group">
+          <label>Job Name *</label>
+          <input type="text" id="job-name" class="form-input" required placeholder="e.g. Weekly Switch Config Backup">
+        </div>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>Job Type *</label>
+            <select id="job-type-select" class="form-select">
+              <option value="CONFIG_BACKUP">Configuration Backup (show running-config)</option>
+              <option value="EXECUTE_COMMAND">Bulk Command Execution</option>
+              <option value="PING_SWEEP">Subnet Ping Sweep</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="job-command-group" style="display:none;">
+          <label>Command to Execute</label>
+          <input type="text" id="job-command-input" class="form-input" value="show version">
+        </div>
+        <div class="form-group">
+          <label>Target Devices (Select All that apply)</label>
+          <select id="job-targets-select" class="form-select" multiple style="height: 110px;"></select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-job-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-job">Schedule & Run Job</button>
         </div>
       </form>
     </div>
