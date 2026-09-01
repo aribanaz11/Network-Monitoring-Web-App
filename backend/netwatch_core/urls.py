@@ -2,7 +2,8 @@ import os
 from django.conf import settings
 from django.contrib import admin
 from django.http import FileResponse, HttpResponse
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve
 from .health import HealthCheckView
 
 def serve_frontend_index(request):
@@ -12,8 +13,9 @@ def serve_frontend_index(request):
     return HttpResponse("<h1>NetWatch API is online.</h1><p>Visit <a href='/api/health/'>/api/health/</a></p>")
 
 urlpatterns = [
-    # Frontend Root SPA
+    # Frontend Root SPA & Assets
     path('', serve_frontend_index, name='frontend_index'),
+    re_path(r'^src/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR.parent / 'frontend' / 'src'}),
 
     # Django Admin
     path('admin/', admin.site.urls),
