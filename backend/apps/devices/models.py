@@ -19,9 +19,12 @@ class DeviceVendor(models.TextChoices):
     GENERIC = 'GENERIC', 'Generic SNMP Device'
 
 class DeviceStatus(models.TextChoices):
+    UP = 'UP', 'Up / Operational'
     ONLINE = 'ONLINE', 'Online / Reachable'
-    OFFLINE = 'OFFLINE', 'Offline / Unreachable'
     DEGRADED = 'DEGRADED', 'Degraded / High Latency'
+    DOWN = 'DOWN', 'Down / Critical'
+    OFFLINE = 'OFFLINE', 'Offline / Unreachable'
+    RECOVERING = 'RECOVERING', 'Recovering / Stabilizing'
     UNKNOWN = 'UNKNOWN', 'Unknown / Unchecked'
 
 class SNMPVersion(models.TextChoices):
@@ -56,7 +59,7 @@ class Device(models.Model):
     )
     snmp_port = models.PositiveIntegerField(default=161)
     
-    # Monitoring Configuration & State
+    # Monitoring Configuration & State Machine
     monitoring_interval = models.PositiveIntegerField(
         default=30,
         help_text="Polling interval in seconds"
@@ -68,6 +71,15 @@ class Device(models.Model):
         db_index=True
     )
     consecutive_failures = models.PositiveIntegerField(default=0)
+    consecutive_successes = models.PositiveIntegerField(default=0)
+    failure_threshold = models.PositiveIntegerField(
+        default=3,
+        help_text="Consecutive failures before transitioning to DOWN"
+    )
+    recovery_threshold = models.PositiveIntegerField(
+        default=2,
+        help_text="Consecutive successes before transitioning from RECOVERING to UP"
+    )
     last_seen = models.DateTimeField(null=True, blank=True)
     last_latency_ms = models.FloatField(null=True, blank=True)
     
@@ -88,17 +100,43 @@ class Device(models.Model):
         return f"{self.hostname} ({self.ip_address}) - {self.status}"
 
     def mark_online(self, latency_ms=None):
-        self.status = DeviceStatus.ONLINE
+        self.status = DeviceStatus.UP
         self.consecutive_failures = 0
+        self.consecutive_successes += 1
         self.last_seen = timezone.now()
         if latency_ms is not None:
             self.last_latency_ms = latency_ms
-        self.save(update_fields=['status', 'consecutive_failures', 'last_seen', 'last_latency_ms', 'updated_at'])
+        self.save(update_fields=['status', 'consecutive_failures', 'consecutive_successes', 'last_seen', 'last_latency_ms', 'updated_at'])
 
     def mark_offline(self):
         self.consecutive_failures += 1
-        self.status = DeviceStatus.OFFLINE
-        self.save(update_fields=['status', 'consecutive_failures', 'updated_at'])
+        self.consecutive_successes = 0
+        self.status = DeviceStatus.DOWN
+        self.save(update_fields=['status', 'consecutive_failures', 'consecutive_successes', 'updated_at'])
+
+
+class DeviceStateTransition(models.Model):
+    """
+    Audit log of all discrete device state transitions with timestamps and trigger reasons.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='state_transitions')
+    from_status = models.CharField(max_length=16)
+    to_status = models.CharField(max_length=16)
+    trigger = models.CharField(max_length=64, default='ICMP_PROBE')
+    reason = models.TextField(blank=True, default='')
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = 'netwatch_device_state_transitions'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['device', 'timestamp'], name='idx_dev_trans_time'),
+        ]
+
+    def __str__(self):
+        return f"{self.device.hostname}: {self.from_status} -> {self.to_status} ({self.timestamp})"
+
 
 
 class DeviceCredential(models.Model):

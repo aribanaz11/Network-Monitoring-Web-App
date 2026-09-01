@@ -36,10 +36,11 @@ class TestCeleryDistributedTasks:
         res = poll_device_icmp_task(str(active_router.id))
         active_router.refresh_from_db()
 
-        assert res['status'] == DeviceStatus.ONLINE
-        assert active_router.status == DeviceStatus.ONLINE
+        assert res['status'] in (DeviceStatus.UP, DeviceStatus.ONLINE)
+        assert active_router.status in (DeviceStatus.UP, DeviceStatus.ONLINE)
         assert active_router.last_latency_ms is not None
         assert active_router.last_seen is not None
+
 
         # Verify MonitoringLog was recorded
         logs = MonitoringLog.objects.filter(monitoring_check__device=active_router)

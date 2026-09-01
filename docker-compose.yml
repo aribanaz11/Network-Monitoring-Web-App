@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Relational Database
+  # 1. Relational Database
   postgres:
     image: postgres:16-alpine
     container_name: netwatch_postgres
@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Document Telemetry Store
+  # 2. Document Telemetry Store
   mongodb:
     image: mongo:7.0
     container_name: netwatch_mongodb
@@ -33,7 +33,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # In-Memory Cache & Celery Broker
+  # 3. In-Memory Cache & Circuit Breaker State
   redis:
     image: redis:7-alpine
     container_name: netwatch_redis
@@ -45,13 +45,13 @@ services:
       timeout: 5s
       retries: 5
 
-  # Message Broker for Distributed Worker Tasks
+  # 4. Message Broker for Distributed Worker Tasks
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: netwatch_rabbitmq
     ports:
       - "5672:5672"
-      - "15672:15672" # Management UI
+      - "15672:15672" # Management Dashboard
     environment:
       RABBITMQ_DEFAULT_USER: netwatch_rabbit
       RABBITMQ_DEFAULT_PASS: netwatch_rabbit_pass
@@ -61,7 +61,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Event Streaming: Zookeeper + Kafka
+  # 5. Event Streaming: Zookeeper + Kafka
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: netwatch_zookeeper
@@ -86,6 +86,82 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  # 6. Django REST Application & UI Web Server
+  web:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: netwatch_web
+    command: gunicorn netwatch_core.wsgi:application --bind 0.0.0.0:8000 --workers 2
+    ports:
+      - "8000:8000"
+    environment:
+      - USE_SQLITE=False
+      - DB_NAME=netwatch_db
+      - DB_USER=netwatch_user
+      - DB_PASSWORD=netwatch_password
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=amqp://netwatch_rabbit:netwatch_rabbit_pass@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - MONGODB_URI=mongodb://mongodb:27017/
+      - MONGODB_ENABLED=True
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - FERNET_KEY=W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 7. Distributed Celery Asynchronous Task Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: netwatch_celery_worker
+    command: celery -A netwatch_core worker -l INFO -Q high_priority_icmp,snmp_telemetry,automation_jobs,default --concurrency=4
+    environment:
+      - USE_SQLITE=False
+      - DB_NAME=netwatch_db
+      - DB_USER=netwatch_user
+      - DB_PASSWORD=netwatch_password
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=amqp://netwatch_rabbit:netwatch_rabbit_pass@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - MONGODB_URI=mongodb://mongodb:27017/
+      - MONGODB_ENABLED=True
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - FERNET_KEY=W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # 8. Celery Beat Periodic Monitoring Scheduler
+  celery-beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: netwatch_celery_beat
+    command: celery -A netwatch_core beat -l INFO
+    environment:
+      - USE_SQLITE=False
+      - DB_NAME=netwatch_db
+      - DB_USER=netwatch_user
+      - DB_PASSWORD=netwatch_password
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=amqp://netwatch_rabbit:netwatch_rabbit_pass@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   pgdata:

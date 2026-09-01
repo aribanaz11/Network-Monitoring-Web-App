@@ -89,19 +89,56 @@ class DevicePingView(views.APIView):
         })
 
 
+from apps.network_engine.tcp_checker import TCPService
+
 class DeviceTCPCheckView(views.APIView):
     """
     On-demand TCP 3-way handshake diagnostic port scanner.
+    Supports single-port checks or multi-port scans.
     POST /api/devices/{id}/tcp-check/
     """
     permission_classes = [IsOperatorRole]
 
     def post(self, request, device_id):
         device = get_object_or_404(Device, id=device_id)
-        port = int(request.data.get('port', 22))
+        ports = request.data.get('ports')
         timeout = float(request.data.get('timeout', 2.0))
 
-        result = check_tcp_port(device.ip_address, port=port, timeout_sec=timeout)
+        if ports and isinstance(ports, list):
+            target_ports = [int(p) for p in ports]
+            scan_result = TCPService.scan_device_ports(device.ip_address, target_ports, timeout_sec=timeout)
+            
+            log_audit_event(
+                user=request.user,
+                action='TCP_MULTI_PORT_SCAN',
+                resource_type='Device',
+                resource_id=str(device.id),
+                ip_address=getattr(request, 'client_ip', '127.0.0.1'),
+                details={'hostname': device.hostname, 'ports': target_ports, 'open': scan_result.ports_open}
+            )
+            return Response({
+                'device_id': str(device.id),
+                'hostname': device.hostname,
+                'ip_address': device.ip_address,
+                'ports_scanned': scan_result.ports_scanned,
+                'ports_open': scan_result.ports_open,
+                'ports_closed': scan_result.ports_closed,
+                'scan_duration_ms': scan_result.scan_duration_ms,
+                'results': [
+                    {
+                        'port': r.port,
+                        'is_open': r.is_open,
+                        'response_time_ms': r.response_time_ms,
+                        'error_reason': r.error_reason,
+                        'timestamp': r.timestamp
+                    }
+                    for r in scan_result.results
+                ]
+            })
+
+        # Single port check
+        port = int(request.data.get('port', 22))
+        res = TCPService.check_port(device.ip_address, port=port, timeout_sec=timeout)
 
         log_audit_event(
             user=request.user,
@@ -109,20 +146,20 @@ class DeviceTCPCheckView(views.APIView):
             resource_type='Device',
             resource_id=str(device.id),
             ip_address=getattr(request, 'client_ip', '127.0.0.1'),
-            details={'hostname': device.hostname, 'port': port, 'is_open': result.is_open}
+            details={'hostname': device.hostname, 'port': port, 'is_open': res.is_open}
         )
 
         return Response({
             'device_id': str(device.id),
             'hostname': device.hostname,
             'ip_address': device.ip_address,
-            'port': result.port,
-            'is_open': result.is_open,
-            'latency_ms': result.latency_ms,
-            'banner': result.banner,
-            'error_message': result.error_message,
-            'timestamp': result.timestamp
+            'port': res.port,
+            'is_open': res.is_open,
+            'latency_ms': res.response_time_ms,
+            'error_reason': res.error_reason,
+            'timestamp': res.timestamp
         })
+
 
 
 class FleetPollingTriggerView(views.APIView):

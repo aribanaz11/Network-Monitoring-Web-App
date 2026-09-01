@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.http import FileResponse, HttpResponse
 from django.urls import path, include, re_path
 from django.views.static import serve
-from .health import HealthCheckView
+from .health import HealthCheckView, LivenessHealthView, ReadinessHealthView
 
 def serve_frontend_index(request):
     frontend_index = settings.BASE_DIR.parent / 'frontend' / 'index.html'
@@ -20,8 +20,10 @@ urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
 
-    # System Health
+    # Observability & Subsystem Health Probes
     path('api/health/', HealthCheckView.as_view(), name='health_check'),
+    path('api/health/live/', LivenessHealthView.as_view(), name='health_live'),
+    path('api/health/ready/', ReadinessHealthView.as_view(), name='health_ready'),
 
     # App Routes
     path('api/auth/', include('apps.accounts.urls')),

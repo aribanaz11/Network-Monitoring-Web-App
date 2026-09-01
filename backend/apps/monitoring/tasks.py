@@ -58,28 +58,22 @@ def poll_device_icmp_task(self, device_id: str):
     else:
         cb.record_failure()
 
-    # 4. Determine State Transition
+    # 4. State Machine & Transition
+    from apps.monitoring.state_machine import DeviceStateMachine
+    from apps.alerts.deduplication import IncidentDeduplicator
+
     old_status = device.status
-    if not result.is_reachable:
-        new_status = DeviceStatus.OFFLINE
-    elif result.packet_loss_percent > 0.0 or (result.avg_latency_ms and result.avg_latency_ms > 150.0):
-        new_status = DeviceStatus.DEGRADED
-    else:
-        new_status = DeviceStatus.ONLINE
+    transition_result = DeviceStateMachine.apply_probe_result(
+        device=device,
+        is_reachable=result.is_reachable,
+        latency_ms=result.avg_latency_ms,
+        packet_loss_percent=result.packet_loss_percent,
+        trigger='CELERY_ICMP_PROBE'
+    )
+    new_status = transition_result.new_status
 
-    # 5. Persist Device Telemetry & Check Log
+    # 5. Persist Check Log & Deduplicated Incidents
     with transaction.atomic():
-        device.status = new_status
-        device.last_latency_ms = result.avg_latency_ms
-        if result.is_reachable:
-            device.consecutive_failures = 0
-            device.last_seen = timezone.now()
-            device.save(update_fields=['status', 'last_latency_ms', 'consecutive_failures', 'last_seen'])
-        else:
-            device.consecutive_failures += 1
-            device.save(update_fields=['status', 'last_latency_ms', 'consecutive_failures'])
-
-        # Record check log
         check, _ = MonitoringCheck.objects.get_or_create(
             device=device,
             check_type=CheckType.ICMP_PING,
@@ -94,15 +88,13 @@ def poll_device_icmp_task(self, device_id: str):
             message=result.raw_output
         )
 
-        # 6. Auto-Incident Management
-        if new_status == DeviceStatus.OFFLINE and old_status != DeviceStatus.OFFLINE:
-            # Device went down -> Create or reopen Alert
-            Alert.objects.create(
+        # 6. Deduplicated Incident Lifecycle
+        if new_status in (DeviceStatus.DOWN, DeviceStatus.OFFLINE):
+            incident, created = IncidentDeduplicator.record_failure(
                 device=device,
-                title=f"Node Unreachable: {device.hostname} ICMP Timeout",
-                message=f"Device {device.hostname} ({device.ip_address}) failed ICMP reachability checks. Packet loss: 100%.",
-                severity=AlertSeverity.CRITICAL,
-                status=AlertStatus.OPEN
+                title=f"Node Outage: {device.hostname} ({device.ip_address})",
+                message=f"Device unreachable. Consecutive failures: {transition_result.consecutive_failures}/{device.failure_threshold}.",
+                severity=AlertSeverity.CRITICAL
             )
             event_bus.publish_event(
                 topic=EventTopic.ALERT_LIFECYCLE,
@@ -111,22 +103,31 @@ def poll_device_icmp_task(self, device_id: str):
                     'device_id': str(device.id),
                     'hostname': device.hostname,
                     'severity': 'CRITICAL',
-                    'event': 'NODE_DOWN',
-                    'title': f"Node Unreachable: {device.hostname} ICMP Timeout"
+                    'event': 'INCIDENT_CREATED' if created else 'INCIDENT_UPDATED',
+                    'incident_id': str(incident.id),
+                    'occurrences': incident.occurrence_count
                 }
             )
 
-        elif new_status == DeviceStatus.ONLINE and old_status == DeviceStatus.OFFLINE:
-            # Device recovered -> Auto-resolve open alerts
-            open_alerts = Alert.objects.filter(device=device, status__in=[AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED])
-            for a in open_alerts:
-                a.status = AlertStatus.RESOLVED
-                a.resolved_at = timezone.now()
-                a.resolution_notes = f"Auto-resolved: Node restored reachability with latency {result.avg_latency_ms}ms."
-                a.save()
+        elif new_status in (DeviceStatus.UP, DeviceStatus.ONLINE) and old_status in (DeviceStatus.DOWN, DeviceStatus.RECOVERING, DeviceStatus.OFFLINE):
+            resolved_count = IncidentDeduplicator.record_recovery(
+                device=device,
+                resolution_note=f"Auto-resolved: Node restored reachability with latency {result.avg_latency_ms}ms."
+            )
+            if resolved_count > 0:
+                event_bus.publish_event(
+                    topic=EventTopic.ALERT_LIFECYCLE,
+                    payload_or_key=str(device.id),
+                    payload={
+                        'device_id': str(device.id),
+                        'hostname': device.hostname,
+                        'event': 'INCIDENTS_RESOLVED',
+                        'resolved_count': resolved_count
+                    }
+                )
 
         # Emit state change event if changed
-        if old_status != new_status:
+        if transition_result.transitioned:
             event_bus.publish_event(
                 topic=EventTopic.DEVICE_STATUS,
                 payload_or_key=str(device.id),
@@ -135,9 +136,11 @@ def poll_device_icmp_task(self, device_id: str):
                     'hostname': device.hostname,
                     'old_status': old_status,
                     'new_status': new_status,
-                    'latency_ms': result.avg_latency_ms
+                    'latency_ms': result.avg_latency_ms,
+                    'reason': transition_result.reason
                 }
             )
+
 
     return {
         'device_id': str(device.id),
