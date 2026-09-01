@@ -3,7 +3,7 @@ services:
     name: network-monitoring-web-app
     runtime: python
     plan: free
-    buildCommand: "chmod +x build.sh && ./build.sh"
+    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py collectstatic --no-input && python backend/manage.py migrate && python backend/manage.py seed_network_demo"
     startCommand: "gunicorn --chdir backend netwatch_core.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
     envVars:
       - key: PYTHON_VERSION
