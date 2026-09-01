@@ -1,8 +1,10 @@
 import os
 import json
 import logging
+from typing import Any, Optional
 from datetime import datetime, timezone
 from django.conf import settings
+
 
 logger = logging.getLogger('netwatch.events.kafka')
 
@@ -34,16 +36,24 @@ class KafkaEventBus:
         except Exception as e:
             logger.warning(f"Kafka unavailable ({str(e)}). Event bus operating in local fallback mode.")
 
-    def publish_event(self, topic: str, key: str, payload: dict):
+    def publish_event(self, topic: str, payload_or_key: Any, payload: Optional[dict] = None):
         """
-        Publish structured event to stream.
+        Publish structured event to stream. Supports publish_event(topic, payload) and publish_event(topic, key, payload).
         """
+        if payload is not None:
+            key = str(payload_or_key)
+            actual_payload = payload
+        else:
+            key = 'netwatch'
+            actual_payload = payload_or_key if isinstance(payload_or_key, dict) else {'data': payload_or_key}
+
         event_message = {
             'topic': topic,
             'key': key,
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'payload': payload
+            'payload': actual_payload
         }
+
 
         if self.producer is not None:
             try:

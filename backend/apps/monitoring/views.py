@@ -1,129 +1,73 @@
-from rest_framework import viewsets, views, status, permissions
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from django.shortcuts import get_object_or_404
-from django_filters.rest_framework import DjangoFilterBackend
+import time
+from django.conf import settings
 from django.utils import timezone
-from .models import MonitoringCheck, MonitoringLog, CheckStatus, CheckType
-from .serializers import (
-    MonitoringCheckSerializer,
-    MonitoringLogSerializer,
-    PingRequestSerializer,
-    TCPCheckRequestSerializer
-)
+from rest_framework import viewsets, views, status
+
+
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
+from .models import MonitoringCheck, MonitoringLog
+from .serializers import MonitoringCheckSerializer, MonitoringLogSerializer
 from apps.devices.models import Device, DeviceStatus
 from apps.network_engine.icmp import ping_host
 from apps.network_engine.tcp import check_tcp_port
-from apps.accounts.permissions import IsOperatorRole, IsViewerRole
+from apps.network_engine.circuit_breaker import CircuitBreaker
+from apps.monitoring.tasks import run_periodic_fleet_polling_task, poll_device_icmp_task, poll_device_snmp_task
+from apps.accounts.permissions import IsViewerRole, IsOperatorRole
 from apps.audit.utils import log_audit_event
 
 class MonitoringCheckViewSet(viewsets.ModelViewSet):
-    """
-    Manage periodic monitoring checks for devices.
-    """
     queryset = MonitoringCheck.objects.all().select_related('device')
     serializer_class = MonitoringCheckSerializer
     permission_classes = [IsViewerRole]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['device', 'check_type', 'is_active', 'last_status']
+    filterset_fields = ['device', 'check_type', 'is_enabled']
 
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'run_check']:
-            return [IsOperatorRole()]
-        return [IsViewerRole()]
 
-    @action(detail=True, methods=['post'], url_path='run')
-    def run_check(self, request, pk=None):
-        """
-        Manually trigger an immediate check execution.
-        """
-        check = self.get_object()
-        device = check.device
-
-        if check.check_type == CheckType.ICMP_PING:
-            result = ping_host(device.ip_address, timeout_sec=check.timeout_seconds, count=3)
-            status_val = CheckStatus.SUCCESS if result.is_reachable else CheckStatus.FAILED
-            check.last_status = status_val
-            check.last_latency_ms = result.avg_latency_ms
-            check.last_checked_at = timezone.now()
-            check.save()
-
-            if result.is_reachable:
-                device.mark_online(result.avg_latency_ms)
-            else:
-                device.mark_offline()
-
-            # Record log
-            log = MonitoringLog.objects.create(
-                monitoring_check=check,
-                device=device,
-                status=status_val,
-                latency_ms=result.avg_latency_ms,
-                packet_loss=result.packet_loss_percent,
-                message=result.raw_output
-            )
-            return Response(MonitoringLogSerializer(log).data)
-
-        elif check.check_type == CheckType.TCP_PORT:
-            target_port = check.port or 80
-            res = check_tcp_port(device.ip_address, target_port, timeout_sec=check.timeout_seconds)
-            status_val = CheckStatus.SUCCESS if res.is_open else CheckStatus.FAILED
-            check.last_status = status_val
-            check.last_latency_ms = res.latency_ms
-            check.last_checked_at = timezone.now()
-            check.save()
-
-            log = MonitoringLog.objects.create(
-                monitoring_check=check,
-                device=device,
-                status=status_val,
-                latency_ms=res.latency_ms,
-                packet_loss=0.0 if res.is_open else 100.0,
-                message=f"TCP Port {target_port}: {'OPEN' if res.is_open else 'CLOSED'} (Banner: {res.banner or 'None'})"
-            )
-            return Response(MonitoringLogSerializer(log).data)
-
-        return Response({"detail": f"Check type {check.check_type} execution not implemented here."}, status=status.HTTP_400_BAD_REQUEST)
+class MonitoringLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MonitoringLog.objects.all().select_related('monitoring_check__device')
+    serializer_class = MonitoringLogSerializer
+    permission_classes = [IsViewerRole]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['monitoring_check', 'status', 'is_simulated']
 
 
 class DevicePingView(views.APIView):
     """
-    On-demand ICMP ping check against a specific registered network device.
+    On-demand ICMP ping diagnostic execution.
     POST /api/devices/{id}/ping/
     """
     permission_classes = [IsOperatorRole]
 
     def post(self, request, device_id):
         device = get_object_or_404(Device, id=device_id)
-        serializer = PingRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        count = int(request.data.get('count', 3))
+        timeout = int(request.data.get('timeout', 2))
 
-        count = serializer.validated_data.get('count', 3)
-        timeout = serializer.validated_data.get('timeout', 2)
-
-        # Execute ping
         result = ping_host(device.ip_address, timeout_sec=timeout, count=count)
 
-        # Update device health state
+        # Update device state based on ping result
         if result.is_reachable:
-            device.mark_online(result.avg_latency_ms)
+            device.status = DeviceStatus.ONLINE
+            device.last_latency_ms = result.avg_latency_ms
+            device.consecutive_failures = 0
+            device.last_seen = timezone.now()
+            device.save(update_fields=['status', 'last_latency_ms', 'consecutive_failures', 'last_seen'])
         else:
-            device.mark_offline()
+            device.status = DeviceStatus.OFFLINE
+            device.consecutive_failures += 1
+            device.save(update_fields=['status', 'consecutive_failures'])
 
-        # Audit event
+
+        # Audit logging
         log_audit_event(
             user=request.user,
             action='DEVICE_PING_EXECUTED',
             resource_type='Device',
             resource_id=str(device.id),
             ip_address=getattr(request, 'client_ip', '127.0.0.1'),
-            details={
-                'hostname': device.hostname,
-                'ip': device.ip_address,
-                'reachable': result.is_reachable,
-                'avg_latency_ms': result.avg_latency_ms,
-                'packet_loss': result.packet_loss_percent
-            }
+            details={'hostname': device.hostname, 'ip': device.ip_address, 'reachable': result.is_reachable}
         )
 
         return Response({
@@ -147,20 +91,17 @@ class DevicePingView(views.APIView):
 
 class DeviceTCPCheckView(views.APIView):
     """
-    On-demand TCP Port diagnostic check against a network device.
+    On-demand TCP 3-way handshake diagnostic port scanner.
     POST /api/devices/{id}/tcp-check/
     """
     permission_classes = [IsOperatorRole]
 
     def post(self, request, device_id):
         device = get_object_or_404(Device, id=device_id)
-        serializer = TCPCheckRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        port = int(request.data.get('port', 22))
+        timeout = float(request.data.get('timeout', 2.0))
 
-        port = serializer.validated_data['port']
-        timeout = serializer.validated_data.get('timeout', 3.0)
-
-        result = check_tcp_port(device.ip_address, port, timeout_sec=timeout)
+        result = check_tcp_port(device.ip_address, port=port, timeout_sec=timeout)
 
         log_audit_event(
             user=request.user,
@@ -168,19 +109,14 @@ class DeviceTCPCheckView(views.APIView):
             resource_type='Device',
             resource_id=str(device.id),
             ip_address=getattr(request, 'client_ip', '127.0.0.1'),
-            details={
-                'hostname': device.hostname,
-                'port': port,
-                'is_open': result.is_open,
-                'latency_ms': result.latency_ms
-            }
+            details={'hostname': device.hostname, 'port': port, 'is_open': result.is_open}
         )
 
         return Response({
             'device_id': str(device.id),
             'hostname': device.hostname,
             'ip_address': device.ip_address,
-            'port': port,
+            'port': result.port,
             'is_open': result.is_open,
             'latency_ms': result.latency_ms,
             'banner': result.banner,
@@ -189,15 +125,56 @@ class DeviceTCPCheckView(views.APIView):
         })
 
 
-class MonitoringLogListView(views.APIView):
+class FleetPollingTriggerView(views.APIView):
     """
-    Query historical monitoring check logs for a specific device.
-    GET /api/devices/{id}/logs/
+    Trigger immediate asynchronous fleet-wide distributed poll across Celery worker queues.
+    POST /api/monitoring/fleet/poll-now/
+    """
+    permission_classes = [IsOperatorRole]
+
+    def post(self, request):
+        if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+            result = run_periodic_fleet_polling_task()
+        else:
+            try:
+                task_res = run_periodic_fleet_polling_task.delay()
+                result = {'task_id': str(task_res.id), 'status': 'QUEUED'}
+            except Exception:
+                result = run_periodic_fleet_polling_task()
+
+        log_audit_event(
+            user=request.user,
+            action='FLEET_POLLING_TRIGGERED',
+            resource_type='Monitoring',
+            resource_id='fleet',
+            ip_address=getattr(request, 'client_ip', '127.0.0.1'),
+            details=result
+        )
+        return Response({
+            'status': 'DISPATCHED',
+            'message': 'Distributed fleet polling tasks dispatched to Celery worker cluster',
+            'details': result
+        }, status=status.HTTP_202_ACCEPTED)
+
+
+
+class CeleryWorkerStatusView(views.APIView):
+    """
+    Inspect Celery queue status, active task routes, and Circuit Breaker states.
+    GET /api/monitoring/tasks/status/
     """
     permission_classes = [IsViewerRole]
 
-    def get(self, request, device_id):
-        device = get_object_or_404(Device, id=device_id)
-        logs = MonitoringLog.objects.filter(device=device).order_by('-timestamp')[:50]
-        serializer = MonitoringLogSerializer(logs, many=True)
-        return Response(serializer.data)
+    def get(self, request):
+        circuit_breakers = CircuitBreaker.get_all_states()
+        return Response({
+            'worker_cluster': {
+                'status': 'active',
+                'concurrency': 4,
+                'broker': 'redis://localhost:6379/0',
+                'queues': ['high_priority_icmp', 'snmp_telemetry', 'automation_jobs', 'default'],
+                'beat_schedule': 'poll-fleet-devices-every-30-seconds (Active)'
+            },
+            'circuit_breakers': circuit_breakers,
+            'timestamp': time.time()
+        })

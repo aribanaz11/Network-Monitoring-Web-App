@@ -39,10 +39,47 @@ def ping_host(host: str, timeout_sec: int = 2, count: int = 3, force_real: bool 
     # Check if we should use simulator for private lab IP addresses if real ping fails or in simulator mode
     is_sim_mode = os.environ.get('SIMULATOR_MODE', 'True').lower() in ('true', '1', 't')
 
+    if is_sim_mode and not force_real and host != '127.0.0.1' and host != 'localhost':
+        last_octet = int(host.split('.')[-1]) if host.replace('.', '').isdigit() and len(host.split('.')) == 4 else 10
+        if last_octet % 10 == 9: # End with 9 -> simulate down device
+            return PingResult(
+                host=host,
+                is_reachable=False,
+                packet_loss_percent=100.0,
+                packets_sent=count,
+                packets_received=0,
+                min_latency_ms=None,
+                avg_latency_ms=None,
+                max_latency_ms=None,
+                jitter_ms=None,
+                raw_output=f"Request timed out for {host}. Destination Host Unreachable (100% loss).",
+                is_simulated=True,
+                timestamp=timestamp
+            )
+        
+        # Simulate realistic latency (e.g. 8ms - 24ms with jitter)
+        base_latency = 8.0 + (abs(hash(host)) % 15)
+        sim_latencies = [base_latency + random.uniform(-1.5, 2.5) for _ in range(count)]
+        return PingResult(
+            host=host,
+            is_reachable=True,
+            packet_loss_percent=0.0,
+            packets_sent=count,
+            packets_received=count,
+            min_latency_ms=round(min(sim_latencies), 2),
+            avg_latency_ms=round(sum(sim_latencies) / count, 2),
+            max_latency_ms=round(max(sim_latencies), 2),
+            jitter_ms=round(random.uniform(0.3, 1.8), 2),
+            raw_output=f"Reply from {host}: bytes=32 time={round(sim_latencies[0], 1)}ms TTL=64\n" * count,
+            is_simulated=True,
+            timestamp=timestamp
+        )
+
     try:
         if 'windows' in system_os:
             # ping -n <count> -w <timeout_in_ms> <host>
             cmd = ['ping', '-n', str(count), '-w', str(int(timeout_sec * 1000)), str(host)]
+
         else:
             # Linux: ping -c <count> -W <timeout_in_sec> <host>
             cmd = ['ping', '-c', str(count), '-W', str(int(timeout_sec)), str(host)]
@@ -117,8 +154,9 @@ def ping_host(host: str, timeout_sec: int = 2, count: int = 3, force_real: bool 
             )
         
         # Simulate realistic latency (e.g. 8ms - 24ms with jitter)
-        base_latency = 8.0 + (hash(host) % 15)
+        base_latency = 8.0 + (abs(hash(host)) % 15)
         sim_latencies = [base_latency + random.uniform(-1.5, 2.5) for _ in range(count)]
+
         return PingResult(
             host=host,
             is_reachable=True,

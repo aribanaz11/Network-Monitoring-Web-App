@@ -1,7 +1,9 @@
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 import dotenv
+
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -158,15 +160,46 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-# Celery Configuration
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+# Celery Configuration & Distributed Processing
+USE_EAGER_CELERY = 'pytest' in sys.argv[0] or 'test' in sys.argv or os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() in ('true', '1', 't')
+
+if USE_EAGER_CELERY:
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+else:
+    CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+    CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+    CELERY_TASK_ALWAYS_EAGER = False
+
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_WORKER_CONCURRENCY', 4))
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+
+
+# Queue Separation & Routing
+CELERY_TASK_ROUTES = {
+    'apps.monitoring.tasks.poll_device_icmp_task': {'queue': 'high_priority_icmp'},
+    'apps.monitoring.tasks.poll_device_snmp_task': {'queue': 'snmp_telemetry'},
+    'apps.monitoring.tasks.run_periodic_fleet_polling_task': {'queue': 'default'},
+}
+
+# Periodic Celery Beat Scheduling
+CELERY_BEAT_SCHEDULE = {
+    'poll-fleet-devices-every-30-seconds': {
+        'task': 'apps.monitoring.tasks.run_periodic_fleet_polling_task',
+        'schedule': 30.0,
+    },
+}
+
 
 # Logging Configuration
 LOGGING = {
