@@ -10,15 +10,15 @@ import urllib.request
 import urllib.error
 
 def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Monitoring-Web-App"):
-    print(f"Connecting to Render REST API with repository: {repo_url}...")
+    print(f"\n==> Connecting to Render REST API for repo: {repo_url}...")
 
-    # 1. Get User / Owner ID
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
 
+    # 1. Get User / Owner ID
     try:
         req = urllib.request.Request("https://api.render.com/v1/owners", headers=headers)
         with urllib.request.urlopen(req) as resp:
@@ -28,16 +28,16 @@ def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Mo
                 return False
             owner_id = owners[0]["owner"]["id"]
             owner_name = owners[0]["owner"].get("name", "User")
-            print(f"Authenticated as Render Owner: {owner_name} (ID: {owner_id})")
+            print(f"[OK] Authenticated as Render Owner: {owner_name} (ID: {owner_id})")
 
     except urllib.error.HTTPError as e:
-        print(f"Authentication failed (HTTP {e.code}): {e.read().decode()}")
+        print(f"[ERROR] Authentication failed (HTTP {e.code}): {e.read().decode()}")
         return False
 
     # 2. Create Web Service
     service_payload = {
         "type": "web_service",
-        "name": "network-monitoring-web-app",
+        "name": "netwatch-monitoring-app",
         "ownerId": owner_id,
         "repo": repo_url,
         "branch": "main",
@@ -45,7 +45,8 @@ def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Mo
             "env": "python",
             "plan": "free",
             "region": "oregon",
-            "buildCommand": "chmod +x build.sh && ./build.sh",
+            "healthCheckPath": "/health",
+            "buildCommand": "pip install -r requirements.txt && python backend/manage.py collectstatic --no-input && python backend/manage.py migrate && python backend/manage.py seed_network_demo",
             "startCommand": "gunicorn --chdir backend netwatch_core.wsgi:application --bind 0.0.0.0:$PORT --workers 2",
             "envVars": [
                 {"key": "PYTHON_VERSION", "value": "3.12.0"},
@@ -53,6 +54,9 @@ def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Mo
                 {"key": "ALLOWED_HOSTS", "value": "*"},
                 {"key": "USE_SQLITE", "value": "True"},
                 {"key": "SIMULATOR_MODE", "value": "True"},
+                {"key": "CELERY_TASK_ALWAYS_EAGER", "value": "True"},
+                {"key": "KAFKA_ENABLED", "value": "False"},
+                {"key": "MONGODB_ENABLED", "value": "False"},
                 {"key": "FERNET_KEY", "value": "W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M="}
             ]
         }
@@ -65,17 +69,17 @@ def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Mo
             res = json.loads(resp.read().decode())
             service_id = res["service"]["id"]
             service_url = res["service"]["serviceDetails"]["url"]
-            print("\n" + "="*60)
-            print("SUCCESS! Render Web Service Created!")
-            print(f"Service ID:  {service_id}")
-            print(f"Live URL:    {service_url}")
-            print("="*60 + "\n")
+            print("\n" + "="*70)
+            print("  SUCCESS! RENDER WEB SERVICE CREATED & DEPLOYMENT TRIGGERED!")
+            print(f"  Service ID:  {service_id}")
+            print(f"  Live URL:    {service_url}")
+            print("="*70 + "\n")
             print("Render is now building and deploying your application.")
             return True
 
     except urllib.error.HTTPError as e:
         err_msg = e.read().decode()
-        print(f"Service creation failed (HTTP {e.code}): {err_msg}")
+        print(f"[ERROR] Service creation failed (HTTP {e.code}): {err_msg}")
         return False
 
 if __name__ == "__main__":
