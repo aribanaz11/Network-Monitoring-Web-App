@@ -13,22 +13,7 @@
 
 You can test the deployed application directly in your browser:
 
-👉 **[https://web-production-fb047f.up.railway.app/](https://web-production-fb047f.up.railway.app/)**
-
-### 👤 Test Accounts (Pre-configured)
-
-I've set up three test accounts with different permission levels so you can explore the app right away:
-
-| Role | Username | Password | What you can do |
-|---|---|---|---|
-| **Admin** | `admin` | `Admin@123456` | Full access: Add/edit devices, run SSH commands, access Django admin |
-| **Operator** | `operator` | `Operator@123456` | Operations: Run ping/TCP diagnostics, view telemetry, execute safe commands |
-| **Viewer** | `viewer` | `Viewer@123456` | Read-only: View dashboard, device inventory, and audit logs |
-
-- **Django Admin**: [https://web-production-fb047f.up.railway.app/admin/](https://web-production-fb047f.up.railway.app/admin/)
-- **Health Check Endpoint**: [https://web-production-fb047f.up.railway.app/api/health/](https://web-production-fb047f.up.railway.app/api/health/)
-
----
+**[https://web-production-fb047f.up.railway.app/](https://web-production-fb047f.up.railway.app/)**
 
 ## 💡 Why I Built This
 
