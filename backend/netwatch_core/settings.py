@@ -4,36 +4,69 @@ from pathlib import Path
 from datetime import timedelta
 import dotenv
 
-
 # Load environment variables
 dotenv.load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', os.environ.get('SECRET_KEY', 'django-insecure-netwatch-fallback-key-2026'))
+# Core Security & Secrets Configuration
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = ['*']
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', os.environ.get('SECRET_KEY'))
+if not SECRET_KEY:
+    if DEBUG or any(arg in sys.argv for arg in ['test', 'pytest', 'makemigrations', 'migrate', 'collectstatic']):
+        SECRET_KEY = 'django-insecure-dev-fallback-key-for-local-testing-only'
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY environment variable must be set in production.")
+
+# Host Header Validation
+ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS', '')
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-if RENDER_EXTERNAL_HOSTNAME:
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-# Production HTTPS / CSRF Configuration for Render & Cloud Platforms
+RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+if RAILWAY_PUBLIC_DOMAIN and RAILWAY_PUBLIC_DOMAIN not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+
+# Production HTTPS / CSRF Configuration for Cloud Platforms
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-CSRF_TRUSTED_ORIGINS = [
-    'https://*.onrender.com',
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-    'http://localhost:4200',
-]
+CSRF_TRUSTED_ORIGINS_ENV = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+if CSRF_TRUSTED_ORIGINS_ENV:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in CSRF_TRUSTED_ORIGINS_ENV.split(',') if o.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = [
+        'https://*.onrender.com',
+        'https://*.up.railway.app',
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+    ]
 if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
+if RAILWAY_PUBLIC_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_PUBLIC_DOMAIN}')
 
-FERNET_KEY = os.environ.get('FERNET_KEY', 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=')
+# The Fernet key must be kept secret. Losing the key will make encrypted credentials unrecoverable.
+FERNET_KEY = os.environ.get('FERNET_KEY')
+if not FERNET_KEY:
+    if DEBUG or any(arg in sys.argv for arg in ['test', 'pytest', 'makemigrations', 'migrate', 'collectstatic', 'seed_network_demo']):
+        # Development and testing fallback key (never use in real production)
+        FERNET_KEY = 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M='
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("FERNET_KEY environment variable must be set in production.")
+
 SIMULATOR_MODE = os.environ.get('SIMULATOR_MODE', 'True').lower() in ('true', '1', 't')
 
 import dj_database_url
-
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -120,7 +153,7 @@ else:
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'netwatch_db'),
             'USER': os.environ.get('DB_USER', 'netwatch_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'netwatch_password'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
             'HOST': os.environ.get('DB_HOST', 'localhost'),
             'PORT': os.environ.get('DB_PORT', '5432'),
             'CONN_MAX_AGE': 60,
@@ -143,8 +176,6 @@ STORAGES = {
     },
 }
 
-
-
 # MongoDB Telemetry Configuration
 MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/')
 MONGODB_DB_NAME = os.environ.get('MONGODB_DB_NAME', 'netwatch_telemetry')
@@ -164,9 +195,6 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
-
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -203,11 +231,14 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True' if DEBUG else 'False').lower() in ('true', '1', 't')
+CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if CORS_ALLOWED_ORIGINS_ENV:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in CORS_ALLOWED_ORIGINS_ENV.split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration & Distributed Processing
-USE_EAGER_CELERY = 'pytest' in sys.argv[0] or 'test' in sys.argv or os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() in ('true', '1', 't')
+USE_EAGER_CELERY = any(arg in sys.argv for arg in ['test', 'pytest']) or os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'True').lower() in ('true', '1', 't')
 
 if USE_EAGER_CELERY:
     CELERY_BROKER_URL = 'memory://'
@@ -219,7 +250,6 @@ else:
     CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
     CELERY_TASK_ALWAYS_EAGER = False
 
-
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -228,8 +258,6 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_WORKER_CONCURRENCY', 4))
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-
-
 
 # Queue Separation & Routing
 CELERY_TASK_ROUTES = {
@@ -245,7 +273,6 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 30.0,
     },
 }
-
 
 # Logging Configuration
 LOGGING = {

@@ -5,7 +5,9 @@ Calls the Render REST API to create and deploy the service.
 """
 
 import sys
+import os
 import json
+import base64
 import urllib.request
 import urllib.error
 
@@ -34,6 +36,9 @@ def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Mo
         print(f"[ERROR] Authentication failed (HTTP {e.code}): {e.read().decode()}")
         return False
 
+    # Generate a secure 32-byte Fernet key if not provided via environment
+    fernet_key = os.environ.get("FERNET_KEY") or base64.urlsafe_b64encode(os.urandom(32)).decode()
+
     # 2. Create Web Service
     service_payload = {
         "type": "web_service",
@@ -57,7 +62,7 @@ def deploy_to_render(api_key, repo_url="https://github.com/aribanaz11/Network-Mo
                 {"key": "CELERY_TASK_ALWAYS_EAGER", "value": "True"},
                 {"key": "KAFKA_ENABLED", "value": "False"},
                 {"key": "MONGODB_ENABLED", "value": "False"},
-                {"key": "FERNET_KEY", "value": "W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M="}
+                {"key": "FERNET_KEY", "value": fernet_key}
             ]
         }
     }

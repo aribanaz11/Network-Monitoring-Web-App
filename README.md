@@ -9,11 +9,26 @@
 
 ---
 
-## 🔗 Live Application & Demo Access
+## 🔗 Live Application
 
-You can test the deployed application directly in your browser:
+Explore the deployed application in production:
 
-**[https://web-production-fb047f.up.railway.app/](https://web-production-fb047f.up.railway.app/)**
+👉 **[https://web-production-fb047f.up.railway.app/](https://web-production-fb047f.up.railway.app/)**
+
+- **Django Admin Portal**: [https://web-production-fb047f.up.railway.app/admin/](https://web-production-fb047f.up.railway.app/admin/)
+- **Health Check Endpoint**: [https://web-production-fb047f.up.railway.app/api/health/](https://web-production-fb047f.up.railway.app/api/health/)
+
+### 👤 Role-Based Access Control (RBAC)
+
+NetWatch supports 3-tier Role-Based Access Control enforced through signed JWT authentication:
+
+| Role | Access Level | Capabilities |
+|---|---|---|
+| **Administrator** | Full Control | Add, edit, and delete network devices; run SSH automation; access Django Admin |
+| **NOC Operator** | Operations | Execute ICMP/TCP diagnostics; poll SNMP telemetry; run whitelisted terminal commands |
+| **Audit Viewer** | Read-Only | Inspect telemetry charts, view device inventory, and review immutable audit logs |
+
+---
 
 ## 💡 Why I Built This
 
@@ -22,8 +37,8 @@ Managing and monitoring network infrastructure often requires switching between 
 I built **NetWatch** to bring these core networking operations into a single, responsive web platform with:
 - **Instant visibility**: See what's online, offline, or experiencing latency spikes.
 - **Interactive diagnostics**: Test ICMP reachability and TCP port connectivity directly from the browser.
-- **Safe remote management**: Run whitelisted diagnostic commands over SSH without sharing raw device passwords.
-- **Smart alert management**: Group related device failures to prevent alert fatigue.
+- **Safe remote management**: Run whitelisted diagnostic commands over SSH with credentials encrypted at rest.
+- **Smart alert management**: Group related device failures into single actionable incidents to eliminate alert storms.
 
 ---
 
@@ -51,30 +66,30 @@ I built **NetWatch** to bring these core networking operations into a single, re
 
 ### 5. Low-Level Diagnostic Suite
 - Sub-second raw ICMP socket pinging with packet count and timeout options.
-- TCP 3-way handshake verification for services (HTTP, SSH, SNMP ports).
+- TCP 3-way handshake verification for critical service ports.
 
 ### 6. Security & Audit Logging
 - Role-Based Access Control (RBAC) enforced with JWT authentication.
-- Every login, device change, and SSH command is logged to an immutable audit table.
+- Every login, device change, and SSH command is logged to an immutable audit table with automatic credential redaction.
 
 ---
 
-## 🏗️ How It Works (Tech Stack)
+## 🔒 Security & Secret Management
 
-- **Frontend**: Clean Single Page Application (SPA) built with Vanilla JavaScript, semantic HTML5, and responsive CSS (no bulky framework dependencies).
-- **Backend**: Django 5.1 and Django REST Framework for clean, documented API endpoints.
-- **Database**: PostgreSQL (production) with automatic SQLite3 fallback (for local development).
-- **Security**: Symmetric AES encryption (Fernet) for stored credentials, JWT tokens with blacklist rotation, and CORS protection.
-- **Task Handling**: Celery-ready architecture for background polling.
+Security is a primary design goal in NetWatch. For comprehensive security documentation, review [SECURITY.md](SECURITY.md).
+
+- **Environment-Driven Configuration**: All sensitive values (`DJANGO_SECRET_KEY`, `FERNET_KEY`, `DATABASE_URL`, and database passwords) are loaded via environment variables.
+- **Zero Committed Secrets**: `.env` files are strictly excluded from version control via `.gitignore`.
+- **Credential Encryption at Rest**: Device SSH passwords and SNMP communities are symmetrically encrypted using Fernet (AES-CBC).
+- **Automated Audit Redaction**: Passwords, tokens, and encryption keys are automatically masked before being stored in audit logs.
+- **Production Hardening**: In production (`DEBUG=False`), missing cryptographic keys or open host configurations fail fast with explicit configuration errors.
 
 ---
 
-## 💻 Running It Locally
-
-If you want to run the project on your machine:
+## 💻 Running Locally
 
 ### Prerequisites
-- Python 3.10+ installed
+- Python 3.10+
 - Git
 
 ### Quick Setup
@@ -95,15 +110,21 @@ source .venv/bin/activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Set up database & seed demo devices
+# 4. Configure your environment
+cp .env.example .env
+
+# 5. Run migrations & seed demo devices
 python backend/manage.py migrate
 python backend/manage.py seed_network_demo
 
-# 5. Start the server
+# 6. Create your administrator account
+python backend/manage.py createsuperuser
+
+# 7. Start the development server
 python backend/manage.py runserver 127.0.0.1:8000
 ```
 
-Open **[http://localhost:8000](http://localhost:8000)** in your browser and log in with `admin` / `Admin@123456`.
+Open **[http://localhost:8000](http://localhost:8000)** in your browser and log in with your newly created credentials.
 
 ---
 
@@ -112,10 +133,10 @@ Open **[http://localhost:8000](http://localhost:8000)** in your browser and log 
 The repository includes a comprehensive 40-test test suite covering all core functions:
 
 ```bash
-pytest backend/tests -v
+pytest
 ```
 
-All tests run locally in memory without needing live network hardware.
+All 40 tests execute in isolated memory environments in seconds without external network dependencies.
 
 ---
 

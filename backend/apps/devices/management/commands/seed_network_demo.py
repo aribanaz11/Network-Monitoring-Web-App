@@ -1,3 +1,4 @@
+import os
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from apps.devices.models import Device, DeviceType, DeviceVendor, DeviceStatus, SNMPVersion, DeviceCredential
@@ -12,19 +13,21 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.NOTICE("==> Seeding NetWatch Demo Users..."))
 
+        admin_pwd = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'NetWatchDevAdminPass!2026')
+        operator_pwd = os.environ.get('DEFAULT_OPERATOR_PASSWORD', 'NetWatchDevOperatorPass!2026')
+        viewer_pwd = os.environ.get('DEFAULT_VIEWER_PASSWORD', 'NetWatchDevViewerPass!2026')
+
         users_data = [
-            {'email': 'admin@netwatch.io', 'username': 'admin', 'name': 'Enterprise Admin', 'role': 'ADMIN', 'password': 'Admin@123456'},
-            {'email': 'operator@netwatch.io', 'username': 'operator', 'name': 'NOC Operator', 'role': 'OPERATOR', 'password': 'Operator@123456'},
-            {'email': 'viewer@netwatch.io', 'username': 'viewer', 'name': 'Audit Viewer', 'role': 'VIEWER', 'password': 'Viewer@123456'},
+            {'email': 'admin@netwatch.io', 'username': 'admin', 'name': 'Enterprise Admin', 'role': 'ADMIN', 'password': admin_pwd},
+            {'email': 'operator@netwatch.io', 'username': 'operator', 'name': 'NOC Operator', 'role': 'OPERATOR', 'password': operator_pwd},
+            {'email': 'viewer@netwatch.io', 'username': 'viewer', 'name': 'Audit Viewer', 'role': 'VIEWER', 'password': viewer_pwd},
         ]
 
         for u in users_data:
             user, created = User.objects.get_or_create(
                 email=u['email'],
                 defaults={
-                    'username': u['username'],
-                    'first_name': u['name'].split()[0],
-                    'last_name': u['name'].split()[1] if len(u['name'].split()) > 1 else '',
+                    'full_name': u['name'],
                     'role': u['role'],
                     'is_staff': u['role'] == 'ADMIN',
                     'is_superuser': u['role'] == 'ADMIN',

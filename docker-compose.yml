@@ -6,15 +6,15 @@ services:
     image: postgres:16-alpine
     container_name: netwatch_postgres
     environment:
-      POSTGRES_DB: netwatch_db
-      POSTGRES_USER: netwatch_user
-      POSTGRES_PASSWORD: netwatch_password
+      POSTGRES_DB: ${DB_NAME:-netwatch_db}
+      POSTGRES_USER: ${DB_USER:-netwatch_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-netwatch_dev_password}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U netwatch_user -d netwatch_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-netwatch_user} -d ${DB_NAME:-netwatch_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,8 +53,8 @@ services:
       - "5672:5672"
       - "15672:15672" # Management Dashboard
     environment:
-      RABBITMQ_DEFAULT_USER: netwatch_rabbit
-      RABBITMQ_DEFAULT_PASS: netwatch_rabbit_pass
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-netwatch_rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-netwatch_rabbit_dev_pass}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_running"]
       interval: 10s
@@ -98,17 +98,18 @@ services:
       - "8000:8000"
     environment:
       - USE_SQLITE=False
-      - DB_NAME=netwatch_db
-      - DB_USER=netwatch_user
-      - DB_PASSWORD=netwatch_password
+      - DB_NAME=${DB_NAME:-netwatch_db}
+      - DB_USER=${DB_USER:-netwatch_user}
+      - DB_PASSWORD=${DB_PASSWORD:-netwatch_dev_password}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - CELERY_BROKER_URL=amqp://netwatch_rabbit:netwatch_rabbit_pass@rabbitmq:5672//
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - MONGODB_URI=mongodb://mongodb:27017/
-      - MONGODB_ENABLED=True
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
-      - FERNET_KEY=W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-amqp://netwatch_rabbit:netwatch_rabbit_dev_pass@rabbitmq:5672//}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/}
+      - MONGODB_ENABLED=${MONGODB_ENABLED:-True}
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      - FERNET_KEY=${FERNET_KEY:-}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,17 +127,18 @@ services:
     command: celery -A netwatch_core worker -l INFO -Q high_priority_icmp,snmp_telemetry,automation_jobs,default --concurrency=4
     environment:
       - USE_SQLITE=False
-      - DB_NAME=netwatch_db
-      - DB_USER=netwatch_user
-      - DB_PASSWORD=netwatch_password
+      - DB_NAME=${DB_NAME:-netwatch_db}
+      - DB_USER=${DB_USER:-netwatch_user}
+      - DB_PASSWORD=${DB_PASSWORD:-netwatch_dev_password}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - CELERY_BROKER_URL=amqp://netwatch_rabbit:netwatch_rabbit_pass@rabbitmq:5672//
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - MONGODB_URI=mongodb://mongodb:27017/
-      - MONGODB_ENABLED=True
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
-      - FERNET_KEY=W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-amqp://netwatch_rabbit:netwatch_rabbit_dev_pass@rabbitmq:5672//}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/}
+      - MONGODB_ENABLED=${MONGODB_ENABLED:-True}
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      - FERNET_KEY=${FERNET_KEY:-}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,13 +154,13 @@ services:
     command: celery -A netwatch_core beat -l INFO
     environment:
       - USE_SQLITE=False
-      - DB_NAME=netwatch_db
-      - DB_USER=netwatch_user
-      - DB_PASSWORD=netwatch_password
+      - DB_NAME=${DB_NAME:-netwatch_db}
+      - DB_USER=${DB_USER:-netwatch_user}
+      - DB_PASSWORD=${DB_PASSWORD:-netwatch_dev_password}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - CELERY_BROKER_URL=amqp://netwatch_rabbit:netwatch_rabbit_pass@rabbitmq:5672//
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-amqp://netwatch_rabbit:netwatch_rabbit_dev_pass@rabbitmq:5672//}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
     depends_on:
       rabbitmq:
         condition: service_healthy

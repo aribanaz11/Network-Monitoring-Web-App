@@ -18,6 +18,10 @@ from apps.audit.models import AuditLog
 def seed():
     print("Seeding NetWatch Database...")
 
+    admin_pwd = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'NetWatchDevAdminPass!2026')
+    operator_pwd = os.environ.get('DEFAULT_OPERATOR_PASSWORD', 'NetWatchDevOperatorPass!2026')
+    viewer_pwd = os.environ.get('DEFAULT_VIEWER_PASSWORD', 'NetWatchDevViewerPass!2026')
+
     # 1. Users
     admin_user, _ = User.objects.get_or_create(
         email='admin@netwatch.io',
@@ -28,7 +32,7 @@ def seed():
             'is_superuser': True
         }
     )
-    admin_user.set_password('Admin@123456')
+    admin_user.set_password(admin_pwd)
     admin_user.save()
 
     operator_user, _ = User.objects.get_or_create(
@@ -39,7 +43,7 @@ def seed():
             'is_staff': False
         }
     )
-    operator_user.set_password('Operator@123456')
+    operator_user.set_password(operator_pwd)
     operator_user.save()
 
     viewer_user, _ = User.objects.get_or_create(
@@ -50,7 +54,7 @@ def seed():
             'is_staff': False
         }
     )
-    viewer_user.set_password('Viewer@123456')
+    viewer_user.set_password(viewer_pwd)
     viewer_user.save()
 
     print("Created users: admin@netwatch.io, operator@netwatch.io, viewer@netwatch.io")

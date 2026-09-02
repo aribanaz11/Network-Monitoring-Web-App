@@ -24,6 +24,6 @@ services:
       - key: MONGODB_ENABLED
         value: "False"
       - key: FERNET_KEY
-        value: "W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M="
+        generateValue: true
       - key: DJANGO_SECRET_KEY
         generateValue: true

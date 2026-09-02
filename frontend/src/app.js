@@ -32,44 +32,62 @@ const state = {
 
 // 1. AUTHENTICATION & JWT SERVICE
 const AuthService = {
-  credentials: {
-    admin: { email: 'admin@netwatch.io', password: 'Admin@123456', name: 'Enterprise Admin', role: 'ADMIN' },
-    operator: { email: 'operator@netwatch.io', password: 'Operator@123456', name: 'NOC Operator', role: 'OPERATOR' },
-    viewer: { email: 'viewer@netwatch.io', password: 'Viewer@123456', name: 'Audit Viewer', role: 'VIEWER' }
+  profiles: {
+    admin: { email: 'admin@netwatch.io', name: 'Enterprise Admin', role: 'ADMIN' },
+    operator: { email: 'operator@netwatch.io', name: 'NOC Operator', role: 'OPERATOR' },
+    viewer: { email: 'viewer@netwatch.io', name: 'Audit Viewer', role: 'VIEWER' }
   },
 
-  async switchRole(roleKey) {
-    const cred = this.credentials[roleKey];
-    if (!cred) return;
-
+  async login(email, password) {
     try {
       const resp = await fetch(`${API_BASE_URL}/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cred.email, password: cred.password })
+        body: JSON.stringify({ email, password })
       });
-
       if (resp.ok) {
         const data = await resp.json();
-        state.currentUser = {
-          email: cred.email,
-          name: cred.name,
-          role: cred.role,
-          token: data.access
-        };
+        const role = data.role || (email.includes('admin') ? 'ADMIN' : email.includes('viewer') ? 'VIEWER' : 'OPERATOR');
+        const name = data.name || (role === 'ADMIN' ? 'Enterprise Admin' : role === 'VIEWER' ? 'Audit Viewer' : 'NOC Operator');
+        state.currentUser = { email, name, role, token: data.access };
         localStorage.setItem('netwatch_token', data.access);
+        localStorage.setItem(`netwatch_token_${role.toLowerCase()}`, data.access);
         UI.updateUserBadge();
-        UI.showToast(`Switched active session to ${cred.role} (${cred.name})`, 'info');
+        UI.showToast(`Authenticated as ${role} (${name})`, 'success');
         App.refreshCurrentView();
-      } else {
-        state.currentUser = { email: cred.email, name: cred.name, role: cred.role, token: 'mock_token' };
-        UI.updateUserBadge();
-        UI.showToast(`Role switched to ${cred.role} (Mock Auth)`, 'info');
+        return true;
       }
+      return false;
     } catch (err) {
-      console.warn("API login failed, using local session state:", err);
-      state.currentUser = { email: cred.email, name: cred.name, role: cred.role, token: 'mock_token' };
+      console.warn("API login failed:", err);
+      return false;
+    }
+  },
+
+  async switchRole(roleKey) {
+    const profile = this.profiles[roleKey];
+    if (!profile) return;
+
+    const savedToken = localStorage.getItem(`netwatch_token_${roleKey}`);
+    if (savedToken) {
+      state.currentUser = { email: profile.email, name: profile.name, role: profile.role, token: savedToken };
+      localStorage.setItem('netwatch_token', savedToken);
       UI.updateUserBadge();
+      UI.showToast(`Switched active session to ${profile.role} (${profile.name})`, 'info');
+      App.refreshCurrentView();
+      return;
+    }
+
+    const enteredPassword = window.prompt(`Enter password for ${profile.role} (${profile.email}):`);
+    if (enteredPassword) {
+      const success = await this.login(profile.email, enteredPassword);
+      if (!success) {
+        UI.showToast(`Authentication failed for ${profile.role}`, 'error');
+      }
+    } else {
+      state.currentUser = { email: profile.email, name: profile.name, role: profile.role, token: null };
+      UI.updateUserBadge();
+      UI.showToast(`Active profile: ${profile.role}`, 'info');
     }
   },
 

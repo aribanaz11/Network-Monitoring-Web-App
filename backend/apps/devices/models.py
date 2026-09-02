@@ -169,7 +169,10 @@ class DeviceCredential(models.Model):
         db_table = 'netwatch_device_credentials'
 
     def _get_fernet(self):
-        key = getattr(settings, 'FERNET_KEY', 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=')
+        key = getattr(settings, 'FERNET_KEY', None)
+        if not key:
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured("FERNET_KEY is not configured in settings. Cannot encrypt or decrypt credentials.")
         if isinstance(key, str):
             key = key.encode()
         return Fernet(key)
