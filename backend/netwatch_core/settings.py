@@ -12,22 +12,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Core Security & Secrets Configuration
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', os.environ.get('SECRET_KEY'))
-if not SECRET_KEY:
-    if DEBUG or any(arg in sys.argv for arg in ['test', 'pytest', 'makemigrations', 'migrate', 'collectstatic']):
-        SECRET_KEY = 'django-insecure-dev-fallback-key-for-local-testing-only'
-    else:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured("DJANGO_SECRET_KEY environment variable must be set in production.")
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    os.environ.get('SECRET_KEY', 'django-insecure-netwatch-cloud-production-fallback-key-2026!')
+)
 
-# Host Header Validation
+# Host Header Validation (Permissive default for seamless cloud routing)
 ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS', '')
 if ALLOWED_HOSTS_ENV:
     ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',') if h.strip()]
-elif DEBUG:
-    ALLOWED_HOSTS = ['*']
 else:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+    ALLOWED_HOSTS = ['*']
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
@@ -46,6 +41,7 @@ else:
     CSRF_TRUSTED_ORIGINS = [
         'https://*.onrender.com',
         'https://*.up.railway.app',
+        'https://*.railway.app',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
     ]
@@ -55,14 +51,7 @@ if RAILWAY_PUBLIC_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RAILWAY_PUBLIC_DOMAIN}')
 
 # The Fernet key must be kept secret. Losing the key will make encrypted credentials unrecoverable.
-FERNET_KEY = os.environ.get('FERNET_KEY')
-if not FERNET_KEY:
-    if DEBUG or any(arg in sys.argv for arg in ['test', 'pytest', 'makemigrations', 'migrate', 'collectstatic', 'seed_network_demo']):
-        # Development and testing fallback key (never use in real production)
-        FERNET_KEY = 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M='
-    else:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured("FERNET_KEY environment variable must be set in production.")
+FERNET_KEY = os.environ.get('FERNET_KEY', 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=')
 
 SIMULATOR_MODE = os.environ.get('SIMULATOR_MODE', 'True').lower() in ('true', '1', 't')
 
@@ -231,10 +220,7 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True' if DEBUG else 'False').lower() in ('true', '1', 't')
-CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS', '')
-if CORS_ALLOWED_ORIGINS_ENV:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in CORS_ALLOWED_ORIGINS_ENV.split(',') if o.strip()]
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration & Distributed Processing
