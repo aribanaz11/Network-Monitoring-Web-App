@@ -2,16 +2,17 @@
 # Exit on error
 set -o errexit
 
-echo "Installing Python dependencies..."
-pip install -r backend/requirements.txt
+echo "==> [NetWatch] Installing Python production dependencies..."
+pip install --upgrade pip
+pip install -r requirements.txt
 
-echo "Collecting static assets..."
+echo "==> [NetWatch] Collecting static assets with WhiteNoise..."
 python backend/manage.py collectstatic --no-input
 
-echo "Applying database migrations..."
+echo "==> [NetWatch] Applying database migrations..."
 python backend/manage.py migrate
 
-echo "Seeding initial enterprise demo devices..."
+echo "==> [NetWatch] Seeding initial network inventory demo devices..."
 python backend/manage.py seed_network_demo
 
-echo "NetWatch Build Completed Successfully!"
+echo "==> [NetWatch] Build completed successfully!"

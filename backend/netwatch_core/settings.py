@@ -10,14 +10,30 @@ dotenv.load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'netwatch-insecure-key-2026')
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 't')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', os.environ.get('SECRET_KEY', 'django-insecure-netwatch-fallback-key-2026'))
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
+
 ALLOWED_HOSTS = ['*']
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+# Production HTTPS / CSRF Configuration for Render & Cloud Platforms
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.onrender.com',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:4200',
+]
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
 
 FERNET_KEY = os.environ.get('FERNET_KEY', 'W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=')
 SIMULATOR_MODE = os.environ.get('SIMULATOR_MODE', 'True').lower() in ('true', '1', 't')
 
 import dj_database_url
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',

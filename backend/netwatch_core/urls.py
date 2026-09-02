@@ -20,10 +20,13 @@ urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
 
-    # Observability & Subsystem Health Probes
+    # Observability & Cloud Health Check Probes (for Render & Kubernetes)
+    path('health', LivenessHealthView.as_view(), name='root_health_no_slash'),
+    path('health/', LivenessHealthView.as_view(), name='root_health'),
     path('api/health/', HealthCheckView.as_view(), name='health_check'),
     path('api/health/live/', LivenessHealthView.as_view(), name='health_live'),
     path('api/health/ready/', ReadinessHealthView.as_view(), name='health_ready'),
+
 
     # App Routes
     path('api/auth/', include('apps.accounts.urls')),
