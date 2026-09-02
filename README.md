@@ -1,122 +1,139 @@
-# NetWatch — Enterprise Network Device Monitoring & Management System
+# 🌐 NetWatch — Network Monitoring & Management Web App
 
-[![NetWatch CI](https://github.com/aribanaz11/Network-Monitoring-Web-App/actions/workflows/ci.yml/badge.svg)](https://github.com/aribanaz11/Network-Monitoring-Web-App/actions)
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
-[![Django 5.1](https://img.shields.io/badge/Django-5.1-green.svg)](https://www.djangoproject.com/)
-[![Render](https://img.shields.io/badge/Deploy%20to-Render-46E3B7.svg)](https://render.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+> A full-stack web application for monitoring network devices, running real-time latency diagnostics, polling SNMP telemetry, and executing secure SSH automation from a unified dashboard.
 
-An enterprise-grade, full-stack Network Management & Observability Platform engineered for ITOM/AIOps operations. NetWatch provides sub-second multi-subsystem reachability diagnostics, a 5-state deterministic device lifecycle state machine, alert storm suppression with automated incident deduplication, non-blocking TCP multi-port diagnostics, secure SSH command automation with Fernet credential encryption at rest, and RFC 7807 problem details error handling.
-
----
-
-## 🏗️ Architecture & Technology Stack
-
-- **Backend Web Core**: Django 5.1 & Django REST Framework
-- **Production WSGI Server**: Gunicorn (Linux/Render) / Waitress (Multi-Threaded Windows)
-- **Static Asset Pipeline**: WhiteNoise (Compressed & Cached)
-- **Database & Persistence**: PostgreSQL 16 (Relational System of Record via `dj-database-url`) / SQLite3 (Zero-config fallback)
-- **Distributed Worker Engine**: Celery 5.4 with RabbitMQ 3.13 Task Broker & Redis 7 Result Store
-- **Event Streaming & Anomaly Detection**: Apache Kafka Domain Event Bus with 5 dedicated topics
-- **Frontend User Interface**: Ultra-Clean Modern Light SPA (Apple/Linear aesthetic with Chart.js telemetry)
-- **Security & Cryptography**: AES-CBC Fernet symmetric encryption at rest, JWT Authentication with Token Blacklisting, and 3-Tier RBAC (`Admin`, `Operator`, `Viewer`).
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Website-22c55e?style=for-the-badge&logo=railway)](https://web-production-fb047f.up.railway.app/)
+[![Python](https://img.shields.io/badge/Python-3.12-38bdf8?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-5.1-10b981?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![License](https://img.shields.io/badge/License-MIT-amber?style=for-the-badge)](LICENSE)
 
 ---
 
-## 🚀 Live Production Deployment on Render
+## 🔗 Live Application & Demo Access
 
-NetWatch is pre-configured for zero-friction cloud deployment on [Render](https://render.com).
+You can test the deployed application directly in your browser:
 
-### Option 1: 1-Click Infrastructure Blueprint (Recommended)
-1. Navigate to [**Render Blueprint Deploy**](https://dashboard.render.com/blueprints/new).
-2. Connect your GitHub repository: `https://github.com/aribanaz11/Network-Monitoring-Web-App`.
-3. Click **Apply**. Render will automatically provision the web service, execute migrations, collect static assets, seed demo inventory, and launch your live URL.
+👉 **[https://web-production-fb047f.up.railway.app/](https://web-production-fb047f.up.railway.app/)**
 
-### Option 2: Manual Web Service Setup
-If creating a manual Web Service on Render:
-- **Repository**: `https://github.com/aribanaz11/Network-Monitoring-Web-App`
-- **Environment / Runtime**: `Python 3`
-- **Build Command**:
-  ```bash
-  pip install -r requirements.txt && python backend/manage.py collectstatic --no-input && python backend/manage.py migrate && python backend/manage.py seed_network_demo
-  ```
-- **Start Command**:
-  ```bash
-  gunicorn --chdir backend netwatch_core.wsgi:application --bind 0.0.0.0:$PORT --workers 2
-  ```
-- **Health Check Path**: `/health`
-- **Plan / Instance Type**: `Free`
+### 👤 Test Accounts (Pre-configured)
+
+I've set up three test accounts with different permission levels so you can explore the app right away:
+
+| Role | Username | Password | What you can do |
+|---|---|---|---|
+| **Admin** | `admin` | `Admin@123456` | Full access: Add/edit devices, run SSH commands, access Django admin |
+| **Operator** | `operator` | `Operator@123456` | Operations: Run ping/TCP diagnostics, view telemetry, execute safe commands |
+| **Viewer** | `viewer` | `Viewer@123456` | Read-only: View dashboard, device inventory, and audit logs |
+
+- **Django Admin**: [https://web-production-fb047f.up.railway.app/admin/](https://web-production-fb047f.up.railway.app/admin/)
+- **Health Check Endpoint**: [https://web-production-fb047f.up.railway.app/api/health/](https://web-production-fb047f.up.railway.app/api/health/)
 
 ---
 
-## 🔐 Environment Variables
+## 💡 Why I Built This
 
-Copy `.env.example` to `.env` to configure your environment:
+Managing and monitoring network infrastructure often requires switching between separate tools for ping sweeps, SNMP stats, and SSH sessions. 
 
-| Variable | Description | Default / Example |
-|---|---|---|
-| `DJANGO_SECRET_KEY` | Unique Django secret cryptographic key | `generateValue: true` on Render |
-| `DEBUG` | Toggle debug mode (Must be `False` in production) | `False` |
-| `ALLOWED_HOSTS` | Comma-separated list of valid host headers | `*,.onrender.com` |
-| `DATABASE_URL` | PostgreSQL connection URL string | Provided automatically by Render DB |
-| `USE_SQLITE` | Standalone file-based database fallback | `True` (if no PostgreSQL attached) |
-| `FERNET_KEY` | 32-byte base64 key for credential encryption | `W3sO-LqP7b_dG5vUv-0L2Y1t9kLpM_xZ7sQ2dF4jK8M=` |
-| `SIMULATOR_MODE` | Simulates packet loss/jitter on synthetic lab nodes | `True` |
-| `CELERY_TASK_ALWAYS_EAGER` | Synchronous task execution for monolithic dynos | `True` |
+I built **NetWatch** to bring these core networking operations into a single, responsive web platform with:
+- **Instant visibility**: See what's online, offline, or experiencing latency spikes.
+- **Interactive diagnostics**: Test ICMP reachability and TCP port connectivity directly from the browser.
+- **Safe remote management**: Run whitelisted diagnostic commands over SSH without sharing raw device passwords.
+- **Smart alert management**: Group related device failures to prevent alert fatigue.
 
 ---
 
-## 💻 Local Development Setup
+## 🎯 What's Inside
 
-### 1. Clone & Setup Virtual Environment
+### 1. Real-Time Telemetry Dashboard
+- Live ICMP response time charts powered by Chart.js.
+- Device availability stats across routers, switches, firewalls, and servers.
+- Summary of active network incidents with severity badges.
+
+### 2. Device Inventory & State Machine
+- Manage network nodes with hostnames, IP addresses, vendor types, and locations.
+- Deterministic 5-state lifecycle (`Online`, `Offline`, `Degraded`, `Discovered`, `Maintenance`).
+- Failure and recovery thresholds to avoid false alarms from temporary packet drops.
+
+### 3. Web-Based SSH Terminal
+- Built on Paramiko to connect securely to network equipment.
+- Device credentials encrypted at rest using AES-CBC (Fernet).
+- Command whitelisting for safe operations (`show ip int brief`, `uname -a`, `uptime`, `df -h`).
+- Harmful commands (`rm -rf`, `reboot`, `erase`) are blocked automatically.
+
+### 4. SNMP Telemetry Explorer
+- Queries standard MIB OIDs (`sysDescr`, CPU load, memory pool).
+- Monitors interface traffic counters (`ifInOctets` / `ifOutOctets`).
+
+### 5. Low-Level Diagnostic Suite
+- Sub-second raw ICMP socket pinging with packet count and timeout options.
+- TCP 3-way handshake verification for services (HTTP, SSH, SNMP ports).
+
+### 6. Security & Audit Logging
+- Role-Based Access Control (RBAC) enforced with JWT authentication.
+- Every login, device change, and SSH command is logged to an immutable audit table.
+
+---
+
+## 🏗️ How It Works (Tech Stack)
+
+- **Frontend**: Clean Single Page Application (SPA) built with Vanilla JavaScript, semantic HTML5, and responsive CSS (no bulky framework dependencies).
+- **Backend**: Django 5.1 and Django REST Framework for clean, documented API endpoints.
+- **Database**: PostgreSQL (production) with automatic SQLite3 fallback (for local development).
+- **Security**: Symmetric AES encryption (Fernet) for stored credentials, JWT tokens with blacklist rotation, and CORS protection.
+- **Task Handling**: Celery-ready architecture for background polling.
+
+---
+
+## 💻 Running It Locally
+
+If you want to run the project on your machine:
+
+### Prerequisites
+- Python 3.10+ installed
+- Git
+
+### Quick Setup
+
 ```bash
+# 1. Clone the repository
 git clone https://github.com/aribanaz11/Network-Monitoring-Web-App.git
 cd Network-Monitoring-Web-App
 
-# Create and activate virtual environment
-python -m venv backend/.venv
-# Windows:
-backend\.venv\Scripts\activate
-# Linux/macOS:
-source backend/.venv/bin/activate
+# 2. Create and activate a virtual environment
+python -m venv .venv
 
-# Install dependencies
+# On Linux/macOS:
+source .venv/bin/activate
+# On Windows:
+.venv\Scripts\activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
-```
 
-### 2. Database Migrations & Initial Data Seeding
-```bash
+# 4. Set up database & seed demo devices
 python backend/manage.py migrate
 python backend/manage.py seed_network_demo
-```
 
-### 3. Run Development Server
-```bash
-# Start Django Server (Port 8000)
+# 5. Start the server
 python backend/manage.py runserver 127.0.0.1:8000
 ```
-Open **[http://localhost:8000](http://localhost:8000)** in your browser.
+
+Open **[http://localhost:8000](http://localhost:8000)** in your browser and log in with `admin` / `Admin@123456`.
 
 ---
 
-## 🧪 Automated Testing
+## 🧪 Testing
 
-NetWatch includes a comprehensive 40-test automated test suite covering all critical network monitoring edge cases:
+The repository includes a comprehensive 40-test test suite covering all core functions:
 
 ```bash
 pytest backend/tests -v
 ```
 
-```text
-============================= 40 passed in 48.39s =============================
-```
+All tests run locally in memory without needing live network hardware.
 
-- `test_state_machine.py`: 5-State lifecycle transitions, failure & recovery hysteresis.
-- `test_deduplication.py`: Alert storm suppression and incident auto-resolution.
-- `test_tcp_observability.py`: TCP multi-port scan, Liveness/Readiness health probes, RFC 7807 error format.
-- `test_icmp.py`: Real ICMP socket pings and simulated latency/loss calculation.
-- `test_snmp.py`: SNMP v2c/v3 telemetry polling and OID walking.
-- `test_ssh.py`: Whitelisted command execution and Fernet credential decryption.
-- `test_tasks.py`: Asynchronous Celery workers and 3-state Circuit Breakers.
-- `test_events.py`: Kafka topic routing and sliding-window outage anomaly detection.
-- `test_auth.py`: JWT authentication, token blacklist, and 3-Tier RBAC.
+---
+
+## 📜 License
+
+This project is open source and available under the [MIT License](LICENSE).
