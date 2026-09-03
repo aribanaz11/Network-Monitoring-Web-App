@@ -73,19 +73,6 @@ I built **NetWatch** to bring these core networking operations into a single, re
 - Every login, device change, and SSH command is logged to an immutable audit table with automatic credential redaction.
 
 ---
-
-## 🔒 Security & Secret Management
-
-Security is a primary design goal in NetWatch. For comprehensive security documentation, review [SECURITY.md](SECURITY.md).
-
-- **Environment-Driven Configuration**: All sensitive values (`DJANGO_SECRET_KEY`, `FERNET_KEY`, `DATABASE_URL`, and database passwords) are loaded via environment variables.
-- **Zero Committed Secrets**: `.env` files are strictly excluded from version control via `.gitignore`.
-- **Credential Encryption at Rest**: Device SSH passwords and SNMP communities are symmetrically encrypted using Fernet (AES-CBC).
-- **Automated Audit Redaction**: Passwords, tokens, and encryption keys are automatically masked before being stored in audit logs.
-- **Production Hardening**: In production (`DEBUG=False`), missing cryptographic keys or open host configurations fail fast with explicit configuration errors.
-
----
-
 ## 💻 Running Locally
 
 ### Prerequisites
